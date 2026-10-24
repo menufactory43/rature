@@ -583,9 +583,7 @@ function carteAttente(p: Partie): void {
     }
   }
   placeCarte.set(j, y);
-  ctx.fillStyle = "rgba(246,239,220,0.9)";
-  ctx.fillRect(x, y, w, h);
-  rectangle(ctx, x, y, w, h, { epaisseur: 1.4, graine: 90, couleur: CRAYON });
+  bristol(ctx, x, y, w, h);
   ecrire(ctx, p.libelle, x + 12, y + 20, { align: "left", police: "titre", taille: 26 });
   const total = Number.isFinite(j.regles.total) ? `${j.regles.total} vagues` : "sans fin";
   ecrire(ctx, total + (p.mode === "defi" && j.options.defi ? ` · défi : ${TEXTE_DEFI[j.options.defi].toLowerCase()}` : ""), x + 12, y + 44, { align: "left", taille: 13, couleur: CRAYON });
@@ -593,6 +591,39 @@ function carteAttente(p: Partie): void {
   if (j.plan) listeVague(j.plan, x + 76, y + 66, w - 200, 14);
   ecrire(ctx, "Pose tes tours, puis :", x + w - 64, y + 52, { taille: 12, couleur: CRAYON });
   bouton(x + w - 116, y + 64, 104, 40, "Go !", () => lancerVague(j), { principal: true });
+}
+
+/** Une fiche bristol scotchée : blanche, lignée de bleu, ligne rouge en haut, deux bouts de scotch aux coins. */
+function bristol(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  ctx.save();
+  ctx.fillStyle = "rgba(40,30,10,0.16)";
+  ctx.fillRect(x + 3, y + 5, w, h);
+  ctx.fillStyle = "#fffdf6";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "rgba(90,130,200,0.3)";
+  ctx.lineWidth = 1;
+  for (let l = y + 52; l < y + h; l += 18) {
+    ctx.beginPath();
+    ctx.moveTo(x, l);
+    ctx.lineTo(x + w, l);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(196,48,43,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(x, y + 32);
+  ctx.lineTo(x + w, y + 32);
+  ctx.stroke();
+  for (const [sx, a] of [[x + 8, -0.6], [x + w - 8, 0.6]] as const) {
+    ctx.save();
+    ctx.translate(sx, y + 2);
+    ctx.rotate(a);
+    ctx.fillStyle = "rgba(240,238,225,0.75)";
+    ctx.fillRect(-18, -7, 36, 14);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(-18, -7, 36, 3);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function bandeauHaut(p: Partie): void {
@@ -824,7 +855,47 @@ function etoile(x: number, y: number, r: number, pleine: boolean, graine: number
     const rr = i % 2 ? r * 0.45 : r;
     pts.push({ x: x + Math.cos(a) * rr, y: y + Math.sin(a) * rr });
   }
-  trait(ui.ctx, pts, { ferme: true, couleur: pleine ? ROUGE : CRAYON, epaisseur: 2.4, graine, fond: pleine ? "rgba(196,48,43,0.55)" : undefined });
+  const ctx = ui.ctx;
+  if (!pleine) {
+    trait(ctx, pts, { ferme: true, couleur: CRAYON, epaisseur: 2, graine });
+    return;
+  }
+  // Une étoile dorée autocollante, comme celles que la prof colle sur les bonnes copies
+  ctx.save();
+  ctx.shadowColor = "rgba(60,40,0,0.35)";
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 2;
+  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0, "#fff1a8");
+  g.addColorStop(0.35, "#f0c43a");
+  g.addColorStop(0.7, "#c9921a");
+  g.addColorStop(1, "#f3cf5a");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = "rgba(150,100,10,0.6)";
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  // Le reflet brillant
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.18, y - r * 0.28, r * 0.22, r * 0.09, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Le mot de la prof, au stylo rouge, selon la copie rendue. */
+function motDeLaProf(p: Partie): string {
+  const j = p.jeu;
+  const n = etoiles(j);
+  const tire = (l: string[]) => l[(j.regles.graine + j.stats.tues) % l.length];
+  if (p.mode === "interro") return j.phase === "gagne" ? "Remarquable !" : j.vague > 20 ? "Très bonne copie" : j.vague > 10 ? "Des efforts, continue" : "Il faut réviser !";
+  if (j.phase !== "gagne") return tire(["Revois tes murs.", "Trop de bavardages !", "Tu peux mieux faire.", "Attention aux voleurs !"]);
+  if (n >= 3) return tire(["Excellent !", "Parfait, bravo !", "Très bien !"]);
+  if (n === 2) return tire(["Bien. Surveille ton Cœur.", "Bon travail !", "C'est bien, continue."]);
+  return tire(["Juste… peut mieux faire.", "Passable.", "Ouf ! De justesse."]);
 }
 export { etoile };
 
@@ -913,9 +984,16 @@ function dessinerFin(p: Partie): void {
   const precision = j.stats.ratures ? Math.round((100 * (j.stats.ratures - j.stats.ratees)) / j.stats.ratures) : 0;
   [`monstres raturés : ${j.stats.tues}`, `vies perdues : ${j.stats.fuites}`, `tours posées : ${j.stats.toursPosees}`, `ratures dans le mille : ${precision} %`]
     .forEach((l, i) => ecrire(ctx, l, W / 2, 360 + i * 28, { taille: 18 }));
+  if (t > 1.6) {
+    const mot = motDeLaProf(p);
+    ecrire(ctx, mot, W / 2 + 10, 476, { police: "titre", taille: 26, couleur: ROUGE, rotation: -0.05, alpha: Math.min(1, (t - 1.6) * 3) });
+    ctx.font = `700 26px Caveat, cursive`;
+    const lm = ctx.measureText(mot).width;
+    trait(ctx, [{ x: W / 2 + 10 - lm / 2, y: 494 }, { x: W / 2 + 10 + lm / 2, y: 489 }], { couleur: ROUGE, epaisseur: 1.6, graine: 199, alpha: Math.min(1, (t - 1.6) * 3) });
+  }
   if (ui.temps - p.finDepuis < 0.8) return;
   const suivante = p.page && p.mode === "campagne" && gagne ? PAGES[PAGES.indexOf(p.page) + 1] : undefined;
-  let y = 500;
+  let y = 512;
   if (suivante) {
     bouton(70, y, 260, 56, "Page suivante", () => nav.ouvrirPage?.(suivante), { principal: true, taille: 22 });
     y += 70;
