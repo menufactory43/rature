@@ -4,7 +4,8 @@ import { monstre } from "../render/monstres";
 import { coeur } from "../render/scene";
 import { dessinerTour, symbole } from "../render/tours";
 import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
-import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
+import type { Carte } from "../sim/carte";
+import { carteDePage, PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
 import { TOURS, TYPES_TOURS } from "../sim/tours";
 import {
   IDS_TALENTS, TALENTS, enregistrer, pageGagnee, pageOuverte, pointsLibres, sauvegarde, toursDebloquees, totalEtoiles,
@@ -23,20 +24,75 @@ export const actions = {
 
 export function dessinerTitre(): void {
   const ctx = ui.ctx;
-  ecrire(ctx, "Rature", W / 2, 150, { police: "titre", taille: 100 });
-  trait(ctx, [{ x: 90, y: 204 }, { x: 200, y: 208 }, { x: 310, y: 202 }], { couleur: ROUGE, epaisseur: 2.4, graine: 2 });
-  ecrire(ctx, "un tower defense au stylo bille", W / 2, 236, { couleur: CRAYON, taille: 18 });
-  // Une petite scène : trois tours, des monstres qui passent
   const t = ui.temps;
-  dessinerTour(ctx, { type: "plume", x: 130, y: 350, angle: t, niveau: 2, spec: 0, temps: t, id: 1 });
-  dessinerTour(ctx, { type: "roquette", x: 200, y: 330, angle: -t * 0.7, niveau: 3, spec: 0, temps: t, id: 2 });
-  dessinerTour(ctx, { type: "foudre", x: 270, y: 350, angle: t * 1.3, niveau: 1, spec: 1, temps: t, id: 3 });
+  // Le titre s'écrit au lancement, puis se fait souligner
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 60, 60 + Math.min(1, t / 0.9) * 300, 140);
+  ctx.clip();
+  ecrire(ctx, "Rature", W / 2, 150, { police: "titre", taille: 100 });
+  ctx.restore();
+  const souligne = Math.max(0, Math.min(1, (t - 0.8) / 0.35));
+  if (souligne > 0) trait(ctx, [{ x: 90, y: 204 }, { x: 90 + 110 * Math.min(1, souligne * 2), y: 208 }, ...(souligne > 0.5 ? [{ x: 90 + 220 * souligne, y: 202 }] : [])], { couleur: ROUGE, epaisseur: 2.4, graine: 2 });
+  ecrire(ctx, "un tower defense au stylo bille", W / 2, 236, { couleur: CRAYON, taille: 18, alpha: Math.min(1, Math.max(0, (t - 1) * 2)) });
+  // Une petite bataille : les monstres passent, les tours tirent, et ils se font raturer
   const types: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "punaise", "postit"];
-  types.forEach((ty, i) => {
-    const x = ((t * 30 + i * 70) % 480) - 40;
-    monstre(ctx, ty, x, 410 + Math.sin(i * 2) * 8, ENNEMIS[ty].rayon * 0.9, i + 1, t, ROUGE, 0);
-  });
-  coeur(ctx, 360, 412, 9, Math.sin(t * 2.4) * 0.15);
+  const MORT = 262;
+  const monstres = types.map((ty, i) => ({ ty, i, x: ((t * 30 + i * 70) % 490) - 40, y: 410 + Math.sin(i * 2) * 8 }));
+  // Les taches laissées sur la page
+  ctx.save();
+  ctx.fillStyle = "rgba(196,48,43,0.14)";
+  for (let k = 0; k < 6; k++) {
+    ctx.beginPath();
+    ctx.arc(MORT + 8 + Math.sin(k * 3.1) * 16, 410 + Math.cos(k * 1.7) * 10, 5 + (k % 3) * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  const vivants = monstres.filter((m) => m.x > 40 && m.x < MORT);
+  const viser = (tx: number, ty: number) => vivants.reduce<{ x: number; y: number } | null>((b, m) => (!b || Math.hypot(m.x - tx, m.y - ty) < Math.hypot(b.x - tx, b.y - ty) ? m : b), null);
+  const tours = [
+    { type: "plume" as const, x: 130, y: 345, id: 1, cadence: 0.55 },
+    { type: "roquette" as const, x: 200, y: 325, id: 2, cadence: 1.3 },
+    { type: "foudre" as const, x: 270, y: 345, id: 3, cadence: 1.1 },
+  ];
+  for (const to of tours) {
+    const c = viser(to.x, to.y);
+    const angle = c ? Math.atan2(c.y - to.y, c.x - to.x) : -Math.PI / 2;
+    const phase = (t / to.cadence + to.id * 0.3) % 1;
+    dessinerTour(ctx, { type: to.type, x: to.x, y: to.y, angle, niveau: to.id === 2 ? 3 : 2, spec: to.id === 3 ? 1 : 0, recul: c ? Math.max(0, 1 - phase * 5) : 0, temps: t, id: to.id });
+    if (!c) continue;
+    if (to.type === "foudre" && phase < 0.12) {
+      const pts = [{ x: to.x, y: to.y }];
+      for (let k = 1; k < 6; k++) pts.push({ x: to.x + ((c.x - to.x) * k) / 6 + Math.sin(k * 7 + t * 50) * 6, y: to.y + ((c.y - to.y) * k) / 6 + Math.cos(k * 5 + t * 40) * 6 });
+      pts.push({ x: c.x, y: c.y });
+      trait(ctx, pts, { couleur: "rgba(90,130,230,0.35)", epaisseur: 6, amp: 1.5 });
+      trait(ctx, pts, { epaisseur: 2, amp: 1.5 });
+    } else if (to.type !== "foudre" && phase < 0.35) {
+      const u = phase / 0.35;
+      const x = to.x + (c.x - to.x) * u;
+      const y = to.y + (c.y - to.y) * u - (to.type === "roquette" ? Math.sin(u * Math.PI) * 30 : 0);
+      ctx.fillStyle = BLEU;
+      ctx.beginPath();
+      ctx.arc(x, y, to.type === "roquette" ? 3.5 : 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  for (const m of monstres) {
+    const r = ENNEMIS[m.ty].rayon * 0.9;
+    if (m.x < MORT) {
+      monstre(ctx, m.ty, m.x, m.y - Math.abs(Math.sin(t * 9 + m.i)) * 2, r, m.i + 1, t + m.i, ROUGE, 0);
+    } else if (m.x < MORT + 22) {
+      // Raturé à grands traits, puis effacé
+      const p = Math.min(1, (m.x - MORT) / 6);
+      ctx.save();
+      ctx.globalAlpha = 1 - Math.max(0, (m.x - MORT - 6) / 16);
+      monstre(ctx, m.ty, MORT, m.y, r, m.i + 1, 0, ROUGE, 0);
+      const pts = Array.from({ length: 8 }, (_, k) => ({ x: MORT - r + (k / 7) * 2 * r, y: m.y + (k % 2 ? -r : r) * 0.8 }));
+      trait(ctx, pts.slice(0, Math.max(2, Math.ceil(8 * p))), { couleur: BLEU, epaisseur: 2.2, graine: m.i });
+      ctx.restore();
+    }
+  }
+  coeur(ctx, 360, 412, 9, Math.max(0, Math.sin(t * 2.4)) ** 4 * 0.35);
   const etoiles = totalEtoiles();
   bouton(60, 480, 280, 64, "Campagne", () => nav.aller("campagne"), { principal: true, sous: etoiles ? `${etoiles} étoile${etoiles > 1 ? "s" : ""}` : "trois cahiers à défendre" });
   const jour = grainePageDuJour();
@@ -100,6 +156,40 @@ const CAHIERS = ["Cahier de brouillon", "Cahier de maths", "Cahier de musique"];
 let cahier = 0;
 let pageChoisie: Page | null = null;
 
+const cartes = new Map<string, Carte>();
+
+/** La carte de la page en tout petit : taches, Cœur, entrées. */
+function miniature(ctx: CanvasRenderingContext2D, p: Page, x: number, y: number, w: number, h: number, ouverte: boolean): void {
+  let c = cartes.get(p.id);
+  if (!c) {
+    c = carteDePage(p);
+    cartes.set(p.id, c);
+  }
+  const k = w / 400;
+  ctx.save();
+  ctx.globalAlpha = ouverte ? 1 : 0.4;
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "rgba(60,62,75,0.4)";
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(x, y, w, h);
+  for (const b of c.blocs) {
+    ctx.fillStyle = b.type === "tache" ? "rgba(28,38,80,0.8)" : b.type === "trou" ? "rgba(120,100,70,0.5)" : "rgba(150,100,50,0.3)";
+    ctx.fillRect(x + b.x * k, y + b.y * k, 20 * k + 0.3, 20 * k + 0.3);
+  }
+  ctx.fillStyle = ROUGE;
+  for (const e of c.entrees) {
+    ctx.beginPath();
+    ctx.arc(x + e.bord.x * k, y + e.bord.y * k, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.font = "9px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("♥", x + c.coeur.x * k, y + c.coeur.y * k);
+  ctx.restore();
+}
+
 export function dessinerCampagne(): void {
   const ctx = ui.ctx;
   titre("Les cahiers", 40, 42);
@@ -118,11 +208,12 @@ export function dessinerCampagne(): void {
     const ouverte = pageOuverte(p);
     const choisie = pageChoisie === p;
     rectangle(ctx, 24, y, W - 48, 80, { couleur: ouverte ? (choisie ? ROUGE : BLEU) : CRAYON, epaisseur: choisie ? 2.4 : 1.6, graine: 200 + i, fond: "rgba(255,252,240,0.9)" });
-    ecrire(ctx, `${p.id}  ${p.nom}`, 40, y + 24, { align: "left", police: "titre", taille: 26, couleur: ouverte ? BLEU : CRAYON });
+    miniature(ctx, p, 32, y + 7, 36, 66, ouverte);
+    ecrire(ctx, `${p.id}  ${p.nom}`, 80, y + 24, { align: "left", police: "titre", taille: 24, couleur: ouverte ? BLEU : CRAYON });
     const n = sauvegarde.etoiles[p.id] ?? 0;
     for (let k = 0; k < 3; k++) etoile(W - 110 + k * 30, y + 24, 11, k < n, 210 + i * 3 + k);
     const infos = ouverte ? `${p.vagues} vagues${p.boss ? " · boss : " + ENNEMIS[p.boss].nom : ""}${p.debloque && !pageGagnee(p.id) ? " · débloque : " + (p.debloque === "colle" ? "la colle" : TOURS[p.debloque].nom) : ""}` : "gagne la page précédente pour l'ouvrir";
-    ecrire(ctx, infos, 40, y + 52, { align: "left", taille: 13, couleur: CRAYON });
+    paragraphe(ctx, infos, 80, y + 44, 230, { align: "left", taille: 13, couleur: CRAYON });
     const extras = [sauvegarde.defis[p.id] ? "défi ✓" : "", sauvegarde.sansFin[p.id] ? `sans fin : ${sauvegarde.sansFin[p.id]}` : ""].filter(Boolean).join(" · ");
     if (extras) ecrire(ctx, extras, W - 40, y + 52, { align: "right", taille: 12, couleur: ROUGE });
     if (ouverte) zone(24, y, W - 48, 80, () => (pageChoisie = choisie ? null : p));

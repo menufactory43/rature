@@ -165,6 +165,22 @@ export type Phase = "attente" | "jeu" | "perdu" | "gagne";
 
 export type Son = "pop" | "aie" | "casse" | "tir" | "boom" | "zap" | "rate" | "page" | "mur" | "rature" | "colle" | "sec" | "boss" | "pose" | "refus" | "vague" | "ding" | "coche";
 
+/** Ce qui vient d'arriver, pour les animations (vidé par l'affichage, jamais lu par la simulation). */
+export type Evt =
+  | { k: "mort"; type: TypeEnnemi; x: number; y: number; r: number; id: number; angle: number; prime: number }
+  | { k: "fuite"; x: number; y: number; vies: number; type: TypeEnnemi }
+  | { k: "tir"; tour: TypeTour; id: number; x: number; y: number; angle: number }
+  | { k: "impact"; x: number; y: number; angle: number }
+  | { k: "boom"; x: number; y: number; r: number }
+  | { k: "pose"; id: number; x: number; y: number }
+  | { k: "amelio"; id: number; x: number; y: number; spec: boolean }
+  | { k: "detruite"; x: number; y: number }
+  | { k: "vague"; n: number; boss: TypeEnnemi | null }
+  | { k: "eclair"; pts: V[] }
+  | { k: "rature"; pts: V[]; touches: number }
+  | { k: "mur"; pts: V[] }
+  | { k: "soin"; x: number; y: number };
+
 export interface Jeu {
   options: Options;
   carte: Carte;
@@ -197,6 +213,7 @@ export interface Jeu {
   stats: { tues: number; fuites: number; encreDepensee: number; ratures: number; ratees: number; toursPosees: number };
   prochainId: number;
   sons: Son[];
+  evts: Evt[];
 }
 
 export function nouveauJeu(options: Options): Jeu {
@@ -210,7 +227,7 @@ export function nouveauJeu(options: Options): Jeu {
     tours: [], ennemis: [], murs: [], colles: [], zones: [], tirs: [], effets: [], eclats: [],
     temps: 0, champSale: true, dernierCalcul: -1, trajets: [], rng: new Rng(options.regles.graine ^ 0x7f4a7c15),
     stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0 },
-    prochainId: 1, sons: [],
+    prochainId: 1, sons: [], evts: [],
   };
   recalculer(j);
   return j;
@@ -280,6 +297,7 @@ function demarrerVague(j: Jeu): void {
     }
   }
   j.sons.push(estVagueBoss(j.regles, j.vague) ? "boss" : "vague");
+  j.evts.push({ k: "vague", n: j.vague, boss: estVagueBoss(j.regles, j.vague) ? j.regles.boss ?? null : null });
 }
 
 // --- Les tours ---
@@ -318,6 +336,7 @@ export function poserTour(j: Jeu, type: TypeTour, x: number, y: number): Resulta
   j.champSale = true;
   effet(j, "pose", x, y, 0.5);
   j.sons.push("pose");
+  j.evts.push({ k: "pose", id: j.tours[j.tours.length - 1].id, x, y });
   return { ...res, ok: true };
 }
 
@@ -341,6 +360,7 @@ export function ameliorer(j: Jeu, t: Tour, spec?: number): boolean {
   t.pv = t.pvMax * ratio;
   effet(j, "pose", t.x, t.y, 0.5);
   j.sons.push("ding");
+  j.evts.push({ k: "amelio", id: t.id, x: t.x, y: t.y, spec: !!spec });
   return true;
 }
 
@@ -391,6 +411,7 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
     }
     j.stats.ratures++;
     effet(j, "rature", 0, 0, 0.45, { pts });
+    j.evts.push({ k: "rature", pts, touches });
     if (!touches) {
       j.stats.ratees++;
       const m = pts[Math.floor(pts.length / 2)];
@@ -407,6 +428,7 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
     j.murs.push({ id: j.prochainId++, segs, age: 0, vie: VIE_MUR });
     j.champSale = true;
     j.sons.push("mur");
+    j.evts.push({ k: "mur", pts });
     return { geste: "mur", ok: true };
   }
   j.colles.push({ id: j.prochainId++, poly: resample(trace, 10), age: 0, vie: VIE_COLLE * j.talents.colleDuree });
@@ -498,6 +520,7 @@ function tuer(j: Jeu, e: Ennemi): void {
     }
   }
   j.encre += prime;
+  j.evts.push({ k: "mort", type: e.type, x: e.x, y: e.y, r: e.r, id: e.id, angle: Math.atan2(e.vy, e.vx), prime });
   j.eclats.push({ x: e.x, y: e.y, r: e.r * 1.4, graine: e.id });
   if (j.eclats.length > 160) j.eclats.shift();
   j.sons.push("pop");
@@ -536,6 +559,8 @@ function choisirCible(j: Jeu, t: Tour, portee: number, exclus?: Set<number>): En
 
 export function step(j: Jeu, dt: number): void {
   j.temps += dt;
+  // Personne ne vide les événements (bot, tests) : on n'en garde qu'un paquet
+  if (j.evts.length > 600) j.evts.splice(0, j.evts.length - 300);
   for (const f of j.effets) f.age += dt;
   j.effets = j.effets.filter((f) => f.age < f.vie);
   if (j.phase !== "jeu") return;
@@ -569,6 +594,7 @@ export function step(j: Jeu, dt: number): void {
   if (detruites.length) {
     for (const t of detruites) {
       effet(j, "detruite", t.x, t.y, 0.8, { r: 24 });
+      j.evts.push({ k: "detruite", x: t.x, y: t.y });
       j.sons.push("casse");
     }
     j.tours = j.tours.filter((t) => t.pv > 0);
@@ -734,6 +760,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       j.stats.fuites += f.vies;
       e.mort = true;
       effet(j, "fuite", coeur.x, coeur.y, 0.8, { texte: "-" + f.vies });
+      j.evts.push({ k: "fuite", x: e.x, y: e.y, vies: f.vies, type: e.type });
       j.sons.push("aie");
     }
   }
@@ -779,6 +806,7 @@ function tours(j: Jeu, dt: number): void {
           degats: s.degats, type: t.type, cible: { x: c.x, y: c.y }, perce: s.perce ?? 1, touches: [], vie: (s.portee + 40) / v, tour: t.id,
         });
         j.sons.push(t.type === "plume" ? "tir" : "boom");
+        j.evts.push({ k: "tir", tour: t.type, id: t.id, x: t.x + Math.cos(t.angle) * 16, y: t.y + Math.sin(t.angle) * 16, angle: t.angle });
         break;
       }
       case "foudre": {
@@ -807,6 +835,7 @@ function tours(j: Jeu, dt: number): void {
           e = suivant;
         }
         effet(j, "eclair", 0, 0, 0.25, { pts });
+        j.evts.push({ k: "eclair", pts });
         j.sons.push("zap");
         break;
       }
@@ -827,6 +856,7 @@ function tours(j: Jeu, dt: number): void {
         if (s.execute && !ENNEMIS[e.type].boss && e.pv - d < e.pvMax * s.execute) d = e.pv + e.bouclier + 1e6;
         blesser(j, e, d, { chiffre: true, rouge: crit });
         effet(j, "coche", pos.x, pos.y, 0.5, { rouge: crit });
+        j.evts.push({ k: "tir", tour: t.type, id: t.id, x: t.x, y: t.y, angle: t.angle });
         j.sons.push("coche");
         break;
       }
@@ -883,6 +913,7 @@ function bougerTirs(j: Jeu, dt: number): void {
         for (const e of j.ennemis) if (!e.mort && Math.hypot(e.x - s.x, e.y - s.y) < zone + e.r) blesser(j, e, s.degats, { chiffre: true });
         if (st?.dps) j.zones.push({ x: s.x, y: s.y, r: zone * 0.8, dps: st.dps, age: 0, vie: 2.5 });
         effet(j, "boom", s.x, s.y, 0.45, { r: zone });
+        j.evts.push({ k: "boom", x: s.x, y: s.y, r: zone });
         s.vie = 0;
       }
       continue;
@@ -890,6 +921,7 @@ function bougerTirs(j: Jeu, dt: number): void {
     for (const e of j.ennemis) {
       if (e.mort || s.touches.includes(e.id) || Math.hypot(e.x - s.x, e.y - s.y) > e.r + 3) continue;
       blesser(j, e, s.degats, { chiffre: s.degats >= 20 });
+      j.evts.push({ k: "impact", x: s.x, y: s.y, angle: Math.atan2(s.vy, s.vx) });
       s.touches.push(e.id);
       if (s.touches.length >= s.perce) {
         s.vie = 0;

@@ -5,6 +5,7 @@ import "./style.css";
 import * as audio from "./audio";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
+import { ameliorer, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
 import { colleDebloquee, effacer, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
@@ -99,6 +100,50 @@ window.addEventListener("blur", mettreEnPause);
 document.addEventListener("visibilitychange", () => document.hidden && mettreEnPause());
 window.addEventListener("resize", redimensionner);
 
+// --- On tourne la page ---
+
+const ancienne = document.createElement("canvas");
+let tourneDepuis = -1;
+const DUREE_TOURNE = 0.5;
+nav.avantChangement = () => {
+  ancienne.width = canvas.width;
+  ancienne.height = canvas.height;
+  ancienne.getContext("2d")!.drawImage(canvas, 0, 0);
+  tourneDepuis = performance.now() / 1000;
+};
+
+/** L'ancienne page se soulève par la droite et part vers la gauche, avec son ombre sur la nouvelle. */
+function tournerPage(): void {
+  if (tourneDepuis < 0) return;
+  const t = (performance.now() / 1000 - tourneDepuis) / DUREE_TOURNE;
+  if (t >= 1) {
+    tourneDepuis = -1;
+    return;
+  }
+  const e = t * t * (3 - 2 * t);
+  const ctx = ui.ctx;
+  const w = canvas.width;
+  const h = canvas.height;
+  const largeur = Math.max(1, w * (1 - e));
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // L'ombre portée sur la nouvelle page
+  const ombre = ctx.createLinearGradient(largeur, 0, largeur + w * 0.12, 0);
+  ombre.addColorStop(0, `rgba(60,45,20,${0.35 * (1 - e)})`);
+  ombre.addColorStop(1, "rgba(60,45,20,0)");
+  ctx.fillStyle = ombre;
+  ctx.fillRect(largeur, 0, w * 0.12, h);
+  // La page qui tourne : écrasée vers la gauche, un peu bombée, assombrie vers le pli
+  ctx.drawImage(ancienne, 0, 0, w, h, 0, -h * 0.02 * Math.sin(e * Math.PI), largeur, h * (1 + 0.04 * Math.sin(e * Math.PI)));
+  const pli = ctx.createLinearGradient(0, 0, largeur, 0);
+  pli.addColorStop(0, "rgba(0,0,0,0)");
+  pli.addColorStop(0.7, `rgba(0,0,0,${0.08 * e})`);
+  pli.addColorStop(1, `rgba(0,0,0,${0.3 * e})`);
+  ctx.fillStyle = pli;
+  ctx.fillRect(0, 0, largeur, h);
+  ctx.restore();
+}
+
 // --- La boucle ---
 
 let avant = performance.now();
@@ -127,6 +172,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "talents") dessinerTalents();
     else if (nav.ecran === "trousse") dessinerTrousse();
   }
+  tournerPage();
   requestAnimationFrame(image);
 }
 
@@ -146,4 +192,5 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
   pageDuJour,
   aller: nav.aller,
   pages: PAGES,
+  sim: { poserTour, ameliorer, lancerVague },
 };

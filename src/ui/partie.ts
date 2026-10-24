@@ -1,5 +1,6 @@
 // L'écran de jeu : la page, les bandeaux, le pense-bête des symboles, le menu des tours, la pause et la fin.
 import * as audio from "../audio";
+import * as fx from "../render/fx";
 import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, rectangle, trait } from "../render/encre";
 import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
@@ -56,6 +57,8 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     fond: null, echelleFond: 0, reste: 0,
   };
   nav.aller("partie");
+  fx.remettreAZero();
+  fx.reglerCibleEncre({ x: 18, y: PAGE_H + 20 });
   audio.jouer(["page"]);
 }
 
@@ -85,6 +88,7 @@ export function avancerPartie(dt: number): void {
   if (p.reste > PAS) p.reste = 0;
   audio.jouer(j.sons);
   j.sons.length = 0;
+  fx.absorber(j, dt);
   if (p.selection && !j.tours.includes(p.selection)) p.selection = null;
   if ((j.phase === "gagne" || j.phase === "perdu") && !p.fin) {
     if (!p.finDepuis) p.finDepuis = ui.temps;
@@ -212,6 +216,10 @@ export function leverPartie(e: PointerEvent): void {
   }
   const r = appliquerTrace(j, trace);
   if (r.ok) p.selection = null;
+  if (r.geste === "tour" || r.geste === "rien" || !r.ok) {
+    const pose = r.ok ? j.tours[j.tours.length - 1] : null;
+    fx.ajouterTrace(trace, pose ? { x: pose.x, y: pose.y } : null, r.ok ? BLEU : CRAYON);
+  }
 }
 
 // --- Le dessin ---
@@ -241,7 +249,8 @@ export function dessinerPartie(echelle: number): void {
   ctx.beginPath();
   ctx.rect(0, HAUT, W, PAGE_H);
   ctx.clip();
-  ctx.translate(0, HAUT);
+  const sec = fx.secousse();
+  ctx.translate(sec.x, HAUT + sec.y);
   let brouillon: Brouillon | null = null;
   if (p.trace) brouillon = { pts: p.trace, geste: classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]).geste };
   scene(ctx, j, brouillon, p.selection);
@@ -264,6 +273,7 @@ export function dessinerPartie(echelle: number): void {
   trait(ctx, [{ x: 0, y: HAUT + PAGE_H }, { x: W, y: HAUT + PAGE_H }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 81 });
   bandeauHaut(p);
   bandeauBas(p);
+  fx.dessinerEcran(ctx, HAUT, W, H);
   if (p.selection) menuTour(p, p.selection);
   if (p.fiches.length) fiche(p.fiches[0], j);
   if (p.pause) dessinerPause();
@@ -377,7 +387,8 @@ function bandeauBas(p: Partie): void {
   ctx.quadraticCurveTo(28, y0 + 22, 18, y0 + 30);
   ctx.quadraticCurveTo(8, y0 + 22, 18, y0 + 8);
   ctx.fill();
-  ecrire(ctx, String(Math.floor(j.encre)), 34, y0 + 21, { align: "left", police: "titre", taille: 30 });
+  const pulse = fx.pulseEncre();
+  ecrire(ctx, String(Math.floor(j.encre)), 34, y0 + 21, { align: "left", police: "titre", taille: 30 * (1 + pulse * 0.18), couleur: pulse > 0.5 ? "#3a5fc4" : BLEU });
   if (p.trace && p.trace.length > 1) {
     const l = polylineLength(p.trace);
     const c = classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]);
@@ -517,17 +528,63 @@ function dessinerFin(p: Partie): void {
   const gagne = j.phase === "gagne";
   const sansFin = p.mode === "sansFin";
   const titreFin = sansFin ? "Fin de la page" : gagne ? "Page gagnée !" : "Page perdue";
+  const t = ui.temps - p.finDepuis;
+  // Le titre s'écrit de gauche à droite
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 60, W * Math.min(1, t / 0.5), 120);
+  ctx.clip();
   ecrire(ctx, titreFin, W / 2, 120, { police: "titre", taille: 54, couleur: gagne || sansFin ? BLEU : ROUGE });
-  const apparition = Math.min(1, (ui.temps - p.finDepuis) * 2);
+  ctx.restore();
+  const apparition = Math.min(1, Math.max(0, (t - 0.3) * 3));
   ctx.save();
   ctx.globalAlpha = apparition;
   if (gagne && p.mode === "campagne") {
+    ctx.globalAlpha = 1;
     const n = etoiles(j);
-    for (let k = 0; k < 3; k++) etoile(W / 2 - 70 + k * 70, 220 - (k === 1 ? 14 : 0), 28, k < n, 160 + k);
+    for (let k = 0; k < 3; k++) {
+      // Chaque étoile est tamponnée à son tour : elle tombe de haut, s'écrase, et l'encre gicle
+      const tk = t - 0.55 - k * 0.35;
+      if (tk < 0) continue;
+      const sx = W / 2 - 70 + k * 70;
+      const sy = 220 - (k === 1 ? 14 : 0);
+      const chute = Math.max(0, 1 - tk / 0.16);
+      const ecrase = tk > 0.16 ? Math.exp(-(tk - 0.16) * 14) * Math.sin((tk - 0.16) * 40) * 0.25 : 0;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, tk * 8);
+      ctx.translate(sx, sy);
+      ctx.scale((1 + chute * 1.6) * (1 + ecrase), (1 + chute * 1.6) * (1 - ecrase));
+      ctx.rotate(chute * (k - 1) * 0.6);
+      ctx.translate(-sx, -sy);
+      etoile(sx, sy, 28, k < n, 160 + k);
+      ctx.restore();
+      if (k < n && tk > 0.16 && tk < 0.6) {
+        const u = (tk - 0.16) / 0.44;
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2 + k;
+          const d1 = 30 + u * 18;
+          trait(ctx, [{ x: sx + Math.cos(a) * d1, y: sy + Math.sin(a) * d1 }, { x: sx + Math.cos(a) * (d1 + 8), y: sy + Math.sin(a) * (d1 + 8) }], { couleur: ROUGE, epaisseur: 2, alpha: 1 - u, graine: 170 + i });
+        }
+      }
+    }
   } else if (sansFin) {
     ecrire(ctx, `${j.vague - 1} vagues tenues`, W / 2, 220, { police: "titre", taille: 44, couleur: ROUGE });
   } else if (!gagne) {
-    ecrire(ctx, `tombée à la vague ${j.vague}`, W / 2, 220, { police: "titre", taille: 38, couleur: ROUGE, rotation: -0.04 });
+    ecrire(ctx, `tombée à la vague ${j.vague}`, W / 2, 200, { police: "titre", taille: 32, couleur: ROUGE, rotation: -0.04 });
+    // Le tampon de la prof
+    const tk = t - 0.6;
+    if (tk > 0) {
+      const chute = Math.max(0, 1 - tk / 0.14);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, tk * 8) * 0.9;
+      ctx.translate(W / 2, 250);
+      ctx.rotate(-0.18);
+      ctx.scale(1 + chute * 1.8, 1 + chute * 1.8);
+      rectangle(ctx, -78, -24, 156, 48, { couleur: ROUGE, epaisseur: 3.5, graine: 181 });
+      rectangle(ctx, -72, -19, 144, 38, { couleur: ROUGE, epaisseur: 1.2, graine: 182 });
+      ecrire(ctx, "À REFAIRE", 0, 1, { police: "titre", taille: 34, couleur: ROUGE });
+      ctx.restore();
+    }
   } else {
     ecrire(ctx, `${j.vies} vies gardées`, W / 2, 220, { police: "titre", taille: 40, couleur: ROUGE });
   }
