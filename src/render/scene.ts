@@ -5,6 +5,7 @@ import type { V } from "../sim/geom";
 import { positionLame, segmentRegle, stats, zoneGomme, type Ennemi, type Jeu, type Tour } from "../sim/jeu";
 import { hash3 } from "../sim/rng";
 import { PORTEE_INFINIE, RAYON_TOUR } from "../sim/tours";
+import { ENCRE_BLEUE, coulure, eclabousser, eclatRouge, flaque, type Goutte } from "./tache";
 import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, pointsCercle, boite, rectangle, trait } from "./encre";
 import { dessinerSous, dessinerSur, echelleTour } from "./fx";
 import { monstre } from "./monstres";
@@ -43,50 +44,23 @@ export function decor(ctx: CanvasRenderingContext2D, carte: Carte): void {
     ctx.fill("nonzero");
     ctx.restore();
   }
-  // Les taches d'encre : les cases voisines se fondent en une seule grosse tache, avec ses coulures
+  // Les taches d'encre : les cases voisines se fondent en une seule flaque, avec ses coulures et ses éclaboussures
   if (taches.length) {
-    ctx.save();
-    ctx.fillStyle = "rgba(28,38,80,0.86)";
-    ctx.beginPath();
-    for (const b of taches) {
-      const pts = pointsCercle(b.x + 10, b.y + 10, 15, b.x * 31 + b.y * 17, 0.18);
-      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-      ctx.closePath();
-    }
-    ctx.fill("nonzero");
+    const gouttes: Goutte[] = [];
     for (const b of taches) {
       const g = b.x * 13 + b.y * 7;
-      // Des éclaboussures autour, et une coulure sous les bords bas
-      if (hash3(g, 1, 0) < 0.35) {
-        const a = hash3(g, 2, 0) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.arc(b.x + 10 + Math.cos(a) * 19, b.y + 10 + Math.sin(a) * 19, 1.5 + hash3(g, 3, 0) * 2, 0, Math.PI * 2);
-        ctx.fill();
+      gouttes.push({ x: b.x + 10, y: b.y + 10, r: 12.5 });
+      // Des renflements irréguliers : une flaque n'est jamais une suite de ronds
+      for (let k = 0; k < 2; k++) {
+        const a = hash3(g, 10 + k, 0) * Math.PI * 2;
+        gouttes.push({ x: b.x + 10 + Math.cos(a) * 6, y: b.y + 10 + Math.sin(a) * 6, r: 5 + hash3(g, 12 + k, 0) * 4 });
       }
+      if (hash3(g, 1, 0) < 0.35) gouttes.push(...eclabousser({ x: b.x + 10, y: b.y + 10, r: 14 }, 2 + Math.floor(hash3(g, 2, 0) * 3), g));
       const dessous = taches.some((o) => o.x === b.x && o.y === b.y + 20);
-      if (!dessous && hash3(g, 4, 0) < 0.3) {
-        // Une coulure : elle part du bord de la tache et finit en goutte
-        const x = b.x + 5 + hash3(g, 5, 0) * 10;
-        const l = 5 + hash3(g, 6, 0) * 9;
-        ctx.beginPath();
-        ctx.moveTo(x - 4, b.y + 20);
-        ctx.quadraticCurveTo(x - 1.8, b.y + 22 + l * 0.6, x - 2.6, b.y + 22 + l);
-        ctx.arc(x, b.y + 22 + l, 2.6, Math.PI, 0, true);
-        ctx.quadraticCurveTo(x + 1.8, b.y + 22 + l * 0.6, x + 4, b.y + 20);
-        ctx.fill();
-      }
+      if (!dessous && hash3(g, 4, 0) < 0.3) gouttes.push(...coulure(b.x + 5 + hash3(g, 5, 0) * 10, b.y + 18, 6 + hash3(g, 6, 0) * 10, 2.2));
     }
-    // Un reflet sur l'encre encore brillante
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.lineWidth = 1.4;
-    ctx.lineCap = "round";
-    for (const b of taches) {
-      if (hash3(b.x, b.y, 9) < 0.8 || taches.some((o) => o.x === b.x && o.y === b.y - 20)) continue;
-      ctx.beginPath();
-      ctx.arc(b.x + 10, b.y + 12, 9, Math.PI * 1.15, Math.PI * 1.55);
-      ctx.stroke();
-    }
-    ctx.restore();
+    const f = flaque(gouttes, ctx.getTransform().a, ENCRE_BLEUE, taches.length * 7 + taches[0].x);
+    if (f) ctx.drawImage(f.image, f.x, f.y, f.w, f.h);
   }
   // Les trous : la feuille déchirée, bord en dents de scie, l'ombre de la page d'en dessous
   for (const b of trous) {
@@ -324,15 +298,18 @@ export interface Brouillon {
 }
 
 export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillon | null, selection: Tour | null): void {
-  // Les taches d'encre laissées par les morts
+  // Les taches d'encre rouge laissées par les morts : de vraies flaques, peintes une fois, tournées au hasard
   ctx.save();
-  ctx.globalAlpha = 0.16;
-  ctx.fillStyle = ROUGE;
+  ctx.globalAlpha = 0.55;
+  const sEclat = Math.min(4, Math.ceil(ctx.getTransform().a * 2) / 2);
   for (const e of j.eclats) {
-    const pts = pointsCercle(e.x, e.y, e.r, e.graine, 0.35);
-    ctx.beginPath();
-    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-    ctx.fill();
+    const f = eclatRouge(e.graine, sEclat);
+    const k = e.r / 9;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate((e.graine * 2.399) % (Math.PI * 2));
+    ctx.drawImage(f.image, f.x * k, f.y * k, f.w * k, f.h * k);
+    ctx.restore();
   }
   ctx.restore();
   // Les chemins, au crayon (plus appuyés avant la première vague)
@@ -386,18 +363,35 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
     trait(ctx, c.poly, { ferme: true, epaisseur: 1.6, graine: c.id, alpha: 0.8 });
     ctx.restore();
   }
-  // Les murs
+  // Les murs : un trait appuyé, repassé plusieurs fois (les passages se chevauchent et foncent là où ils se croisent),
+  // un pâté d'encre à chaque bout, et un reflet tant que l'encre est fraîche. Un mur abîmé pâlit et s'amincit.
   for (const m of j.murs) {
     const seche = Math.min(1, (m.vie - m.age) / 3);
-    m.segs.forEach((s, i) => {
-      if (s.pv <= 0) return;
-      const r = s.pv / s.pvMax;
-      trait(ctx, [s.a, s.b], { epaisseur: 2 + 2.4 * r, graine: m.id * 100 + i, alpha: seche * (0.35 + 0.65 * r), amp: 0.5 });
-    });
-    // L'encre fraîche brille, puis sèche
-    if (m.age < 1.5) {
-      const vivants = m.segs.filter((s) => s.pv > 0);
-      for (const [i, s] of vivants.entries()) trait(ctx, [{ x: s.a.x - 0.8, y: s.a.y - 0.8 }, { x: s.b.x - 0.8, y: s.b.y - 0.8 }], { couleur: "#ffffff", epaisseur: 1, alpha: 0.6 * (1 - m.age / 1.5), amp: 0.3, graine: m.id * 100 + i + 50 });
+    for (const [k, run] of troncons(m.segs).entries()) {
+      const g = m.id * 100 + k * 13;
+      const r = run.r;
+      const alpha = seche * (0.35 + 0.65 * r);
+      ctx.save();
+      ctx.globalCompositeOperation = "multiply";
+      const passes = r > 0.6 ? 3 : r > 0.3 ? 2 : 1;
+      for (let p = 0; p < passes; p++) {
+        const d = p === 0 ? 0 : p === 1 ? 1 : -0.95;
+        trait(ctx, decaler(run.pts, d * (0.6 + 0.7 * r)), { epaisseur: (p === 0 ? 1.4 : 1) + 0.9 * r, graine: g + p * 5, alpha: alpha * (p === 0 ? 0.62 : 0.48), amp: 0.6, pate: false });
+      }
+      // Les pâtés : là où la bille s'est posée et là où elle s'est levée
+      const bouts = [run.pts[0], run.pts[run.pts.length - 1]];
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.fillStyle = BLEU;
+      bouts.forEach((q, i) => {
+        if (i === 1 && hash3(g, 3, 0) < 0.4) return;
+        const rr = (1.3 + 0.9 * r) * (0.8 + hash3(g, i, 1) * 0.5);
+        ctx.beginPath();
+        ctx.ellipse(q.x, q.y, rr, rr * 0.82, hash3(g, i, 2) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+      // L'encre fraîche brille, puis sèche
+      if (m.age < 1.5) trait(ctx, decaler(run.pts, -0.9), { couleur: "#ffffff", epaisseur: 0.9, alpha: 0.55 * (1 - m.age / 1.5) * r, amp: 0.3, graine: g + 50, pate: false });
     }
   }
   // La portée de la tour choisie
@@ -635,3 +629,33 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
 }
 
 export { PAPIER };
+
+/** Les segments vivants d'un mur, en tracés continus ; un tracé se coupe là où un segment est tombé ou abîmé autrement. */
+function troncons(segs: { a: V; b: V; pv: number; pvMax: number }[]): { pts: V[]; r: number }[] {
+  const res: { pts: V[]; r: number }[] = [];
+  let cur: { pts: V[]; r: number } | null = null;
+  for (const s of segs) {
+    if (s.pv <= 0) {
+      cur = null;
+      continue;
+    }
+    const r = s.pv / s.pvMax;
+    if (cur && Math.abs(cur.r - r) < 0.15) cur.pts.push(s.b);
+    else {
+      cur = { pts: [s.a, s.b], r };
+      res.push(cur);
+    }
+  }
+  return res;
+}
+
+/** Une polyligne décalée de d sur le côté (la normale moyenne en chaque point). */
+function decaler(pts: V[], d: number): V[] {
+  if (!d) return pts;
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: p.x - ((b.y - a.y) / l) * d, y: p.y + ((b.x - a.x) / l) * d };
+  });
+}
