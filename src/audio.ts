@@ -1,10 +1,14 @@
-// Les sons, synthétisés (aucun fichier) : le grattement du stylo, les pops d'encre, la page qui tourne.
+// Les sons : des bruitages enregistrés (public/sons, faits avec tools/sons.mjs), plusieurs prises par son et une
+// hauteur qui varie un peu pour qu'une rafale ne sonne pas mécanique. Tant qu'ils chargent (ou s'ils manquent), des
+// sons synthétisés les remplacent. Le stylo qui gratte suit la vitesse du doigt.
 import type { Son } from "./sim/jeu";
 import { reglages, surChangement } from "./reglages";
 
 let ctx: AudioContext | null = null;
 let bruit: AudioBuffer | null = null;
-let grattement: { gain: GainNode; filtre: BiquadFilterNode } | null = null;
+let grattement: { gain: GainNode; filtre: BiquadFilterNode; source: AudioBufferSourceNode } | null = null;
+/** Les prises chargées, par son. */
+const prises: Partial<Record<Son | "gratte", AudioBuffer[]>> = {};
 /** Tout passe par là : coupé, plus rien ne sort. */
 let maitre: GainNode | null = null;
 let busEffets: GainNode | null = null;
@@ -61,13 +65,82 @@ export function deverrouiller(): void {
   gain.gain.value = 0;
   src.connect(filtre).connect(gain).connect(busEffets!);
   src.start();
-  grattement = { gain, filtre };
+  grattement = { gain, filtre, source: src };
+  void charger(ctx);
+}
+
+/** Combien de prises pour chaque son (0 : un seul fichier, sans numéro). */
+const PRISES: Record<Son | "gratte", number> = {
+  gratte: 0, pose: 2, tir: 3, pop: 3, aie: 2, casse: 3, boom: 2, zap: 2, rate: 2, rature: 3, mur: 0, colle: 2, sec: 2,
+  page: 3, refus: 0, vague: 0, ding: 2, coche: 2, boss: 0,
+};
+
+/** Le volume de chaque son dans le mélange : les tirs, très fréquents, restent discrets. */
+const VOLUME: Record<Son, number> = {
+  pose: 0.8, tir: 0.16, pop: 0.42, aie: 0.9, casse: 0.5, boom: 0.6, zap: 0.32, rate: 0.6, rature: 0.75, mur: 0.7,
+  colle: 0.7, sec: 0.7, page: 0.8, refus: 0.6, vague: 0.7, ding: 0.55, coche: 0.6, boss: 0.9,
+};
+
+/** Un fichier de public/sons, décodé (null s'il manque). */
+export async function decoder(c: AudioContext, nom: string): Promise<AudioBuffer | null> {
+  try {
+    const r = await fetch(`${import.meta.env.BASE_URL}sons/${nom}.mp3`);
+    if (!r.ok) return null;
+    return await c.decodeAudioData(await r.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function charger(c: AudioContext): Promise<void> {
+  await Promise.all((Object.keys(PRISES) as (Son | "gratte")[]).map(async (s) => {
+    const n = PRISES[s];
+    const noms = n ? Array.from({ length: n }, (_, i) => `${s}${i}`) : [s];
+    const b = (await Promise.all(noms.map((x) => decoder(c, x)))).filter((x): x is AudioBuffer => !!x);
+    if (b.length) prises[s] = b;
+  }));
+  // Le grattement enregistré prend la place du bruit filtré : une boucle, les bords du fichier évités
+  const g = prises.gratte?.[0];
+  if (g && grattement) {
+    const src = c.createBufferSource();
+    src.buffer = g;
+    src.loop = true;
+    src.loopStart = 0.06;
+    src.loopEnd = g.duration - 0.06;
+    grattement.filtre.type = "lowpass";
+    grattement.filtre.frequency.value = 9000;
+    grattement.filtre.Q.value = 0.5;
+    grattement.source.stop();
+    src.connect(grattement.filtre);
+    src.start(0, 0.06 + Math.random() * (g.duration - 0.2));
+    grattement.source = src;
+  }
+}
+
+/** Une prise au hasard, un peu plus haute ou plus basse. */
+function prise(s: Son): boolean {
+  const b = prises[s];
+  if (!ctx || !b?.length || !busEffets) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = b[Math.floor(Math.random() * b.length)];
+  src.playbackRate.value = 0.93 + Math.random() * 0.14;
+  const g = ctx.createGain();
+  g.gain.value = VOLUME[s];
+  src.connect(g).connect(busEffets);
+  src.start();
+  return true;
 }
 
 /** Le stylo qui gratte le papier, selon la vitesse du doigt (0 = silence). */
 export function gratter(vitesse: number): void {
   if (!ctx || !grattement) return;
   const v = actif ? Math.min(1, vitesse / 1.5) : 0;
+  if (prises.gratte) {
+    // L'enregistrement : plus fort et un peu plus aigu quand le doigt file
+    grattement.gain.gain.setTargetAtTime(v * 0.55, ctx.currentTime, 0.03);
+    grattement.source.playbackRate.setTargetAtTime(0.8 + v * 0.45, ctx.currentTime, 0.05);
+    return;
+  }
   grattement.gain.gain.setTargetAtTime(v * 0.09, ctx.currentTime, 0.03);
   grattement.filtre.frequency.setTargetAtTime(1800 + v * 2200, ctx.currentTime, 0.05);
 }
@@ -113,6 +186,7 @@ export function jouer(sons: Son[]): void {
     // Pas plus d'un même son toutes les 50 ms (une rafale de pops reste lisible)
     if ((dernier[s] ?? -1) > maintenant - 0.05) continue;
     dernier[s] = maintenant;
+    if (prise(s)) continue;
     switch (s) {
       case "pop": bip(500 + Math.random() * 300, 0.08, "sine", 0.12, 0.4); break;
       case "tir": souffle(0.04, 3500, 0.04, 2); break;
