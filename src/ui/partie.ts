@@ -24,6 +24,7 @@ import { enregistrer, noterPage, sauvegarde } from "../progression";
 import { reglages } from "../reglages";
 import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./base";
 import { nav } from "./nav";
+import { BANDE, PANNEAU_W, type Vue } from "./vue";
 import { ouvrirReglages } from "./reglages";
 
 export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro";
@@ -168,7 +169,7 @@ export function toucherPartie(x: number, y: number, e: PointerEvent): boolean {
   }
   const j = p.jeu;
   if (j.phase !== "attente" && j.phase !== "jeu") return false;
-  if (y < HAUT || y > HAUT + PAGE_H || p.doigt !== null) return false;
+  if (x < 0 || x > W || y < HAUT || y > HAUT + PAGE_H || p.doigt !== null) return false;
   p.doigt = e.pointerId;
   p.trace = [{ x, y: y - HAUT, t: e.timeStamp }];
   p.sec = false;
@@ -276,12 +277,21 @@ function fond(p: Partie, echelle: number): HTMLCanvasElement {
   return p.fond;
 }
 
-export function dessinerPartie(echelle: number): void {
+export function dessinerPartie(v: Vue): void {
   const p = partie;
   if (!p) return;
   const ctx = ui.ctx;
   const j = p.jeu;
-  ctx.drawImage(fond(p, echelle), 0, 0, W, H);
+  const portrait = v.mise === "portrait";
+  ctx.setTransform(v.carte);
+  ctx.save();
+  if (!portrait) {
+    ctx.beginPath();
+    ctx.rect(0, HAUT, W, PAGE_H);
+    ctx.clip();
+  }
+  ctx.drawImage(fond(p, v.carte.a), 0, 0, W, H);
+  ctx.restore();
   // La page
   ctx.save();
   ctx.beginPath();
@@ -304,7 +314,8 @@ export function dessinerPartie(echelle: number): void {
     ecrire(ctx, nom, b.x + 18, b.y - 24, { couleur: p.sec ? ROUGE : CRAYON, taille: 15 });
   }
   ctx.restore();
-  if (j.phase === "attente") carteAttente(p);
+  // Le cahier ouvert montre la vague à venir sur la page de droite : la carte reste dégagée
+  if (j.phase === "attente" && v.mise !== "ouvert") carteAttente(p, v.mise === "bande");
   const conseil = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : astuce(p);
   if (conseil && !p.trace) {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
@@ -312,18 +323,67 @@ export function dessinerPartie(echelle: number): void {
     ctx.fillRect(20, y - 22, W - 40, 44);
     paragraphe(ctx, conseil, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
   }
-  trait(ctx, [{ x: 0, y: HAUT }, { x: W, y: HAUT }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 80 });
-  trait(ctx, [{ x: 0, y: HAUT + PAGE_H }, { x: W, y: HAUT + PAGE_H }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 81 });
-  bandeauHaut(p);
-  bandeauBas(p);
-  fx.dessinerEcran(ctx, HAUT, W, H);
+  let encre = { x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 };
+  if (portrait) {
+    trait(ctx, [{ x: 0, y: HAUT }, { x: W, y: HAUT }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 80 });
+    trait(ctx, [{ x: 0, y: HAUT + PAGE_H }, { x: W, y: HAUT + PAGE_H }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 81 });
+    bandeauHaut(p);
+    bandeauBas(p);
+  } else {
+    ctx.setTransform(v.panneau);
+    const k = v.panneau.a;
+    // La bande est découpée dans une page entière, loin de la marge rouge
+    if (v.mise === "bande") ctx.drawImage(papierPanneau(PANNEAU_W, k), 60 * k, 0, BANDE * k, PAGE_H * k, 0, 0, BANDE, PAGE_H);
+    else ctx.drawImage(papierPanneau(PANNEAU_W, k), 0, 0, PANNEAU_W, PAGE_H);
+    const ou = v.mise === "bande" ? bande(p) : panneau(p);
+    // L'encre gagnée vole jusqu'au compteur, sur l'autre page s'il le faut
+    const q = v.carte.inverse().multiply(v.panneau).transformPoint(ou);
+    encre = { x: q.x, y: q.y - HAUT };
+    ctx.setTransform(v.carte);
+  }
+  fx.reglerCibleEncre(encre);
+  ctx.save();
+  if (!portrait) {
+    // Les éclairs et les bannières restent sur le cahier
+    ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
+    const f = v.feuilles;
+    const x1 = Math.min(...f.map((r) => r.x));
+    const y1 = Math.min(...f.map((r) => r.y));
+    ctx.beginPath();
+    ctx.rect(x1, y1, Math.max(...f.map((r) => r.x + r.w)) - x1, Math.max(...f.map((r) => r.y + r.h)) - y1);
+    ctx.clip();
+    ctx.setTransform(v.carte);
+  }
+  fx.dessinerEcran(ctx, HAUT, W, portrait ? H : HAUT + PAGE_H);
+  ctx.restore();
   postitNouveau(p);
   if (j.choix) choixFournitures(p, j.choix);
   else p.choixDepuis = 0;
   if (p.selection) menuTour(p, p.selection);
+  // Les fenêtres : sur toute la feuille en portrait et avec la bande, sur la page de droite du cahier ouvert
+  ctx.save();
+  ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
+  const f = v.mise === "ouvert" ? [v.feuilles[1]] : v.feuilles;
+  const x1 = Math.min(...f.map((r) => r.x));
+  const y1 = Math.min(...f.map((r) => r.y));
+  ctx.beginPath();
+  ctx.rect(x1, y1, Math.max(...f.map((r) => r.x + r.w)) - x1, Math.max(...f.map((r) => r.y + r.h)) - y1);
+  ctx.clip();
+  ctx.setTransform(v.dessus);
   if (p.fiches.length) fiche(p.fiches[0], j);
   if (p.pause) dessinerPause();
   if (p.fin) dessinerFin(p);
+  ctx.restore();
+}
+
+let papierBande: { c: HTMLCanvasElement; cle: string } | null = null;
+
+function papierPanneau(largeur: number, echelle: number): HTMLCanvasElement {
+  const cle = `${largeur}/${echelle}`;
+  if (papierBande?.cle !== cle) {
+    papierBande = { c: papier(largeur, PAGE_H, echelle, "seyes"), cle };
+  }
+  return papierBande.c;
 }
 
 /** L'interro : trois fiches bristol à choisir, la page vide derrière. */
@@ -560,7 +620,8 @@ function listeVague(plan: PlanVague, x: number, y: number, largeur: number, tail
 /** Calculée une fois par partie, pour que la carte ne saute pas quand on trace des murs. */
 const placeCarte = new WeakMap<Jeu, number>();
 
-function carteAttente(p: Partie): void {
+/** Avec la bande, le bouton Go est sous le pouce, dans la bande : la carte ne fait que présenter la page. */
+function carteAttente(p: Partie, sansBouton = false): void {
   const ctx = ui.ctx;
   const j = p.jeu;
   const x = 14;
@@ -589,6 +650,11 @@ function carteAttente(p: Partie): void {
   ecrire(ctx, total + (p.mode === "defi" && j.options.defi ? ` · défi : ${TEXTE_DEFI[j.options.defi].toLowerCase()}` : ""), x + 12, y + 44, { align: "left", taille: 13, couleur: CRAYON });
   ecrire(ctx, "Vague 1 :", x + 12, y + 66, { align: "left", taille: 14, couleur: CRAYON });
   if (j.plan) listeVague(j.plan, x + 76, y + 66, w - 200, 14);
+  if (sansBouton) {
+    ecrire(ctx, "Pose tes tours,", x + w - 64, y + 52, { taille: 13, couleur: CRAYON });
+    ecrire(ctx, reglages.gaucher ? "← puis Go !" : "puis Go ! →", x + w - 64, y + 72, { taille: 15, couleur: ROUGE });
+    return;
+  }
   ecrire(ctx, "Pose tes tours, puis :", x + w - 64, y + 52, { taille: 12, couleur: CRAYON });
   bouton(x + w - 116, y + 64, 104, 40, "Go !", () => lancerVague(j), { principal: true });
 }
@@ -690,6 +756,155 @@ function bandeauBas(p: Partie): void {
     ecrire(ctx, String(cout), x, y + 16, { taille: 12, couleur: possible ? STYLOS[t] : CRAYON });
     zone(x - largeur / 2, y - 22, largeur, 46, () => (p.fiches = [t]));
   });
+}
+
+/** La goutte d'encre et le compteur ; le coût du trait en cours juste dessous. */
+function compteurEncre(p: Partie, x: number, y: number, taille: number, xCout: number, yCout: number): void {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const k = taille / 30;
+  ctx.fillStyle = BLEU;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 13 * k);
+  ctx.quadraticCurveTo(x + 10 * k, y + k, x, y + 9 * k);
+  ctx.quadraticCurveTo(x - 10 * k, y + k, x, y - 13 * k);
+  ctx.fill();
+  const pulse = fx.pulseEncre();
+  ecrire(ctx, String(Math.floor(j.encre)), x + 16 * k, y, { align: "left", police: "titre", taille: taille * (1 + pulse * 0.18), couleur: pulse > 0.5 ? "#3a5fc4" : BLEU });
+  if (p.trace && p.trace.length > 1 && !p.arme) {
+    const l = polylineLength(p.trace);
+    const c = classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]);
+    const cout = c.geste === "tour" ? coutPose(j, tourDe(c.glyphe!)) : c.geste === "rature" ? coutRature(l) : c.geste === "cercle" ? l * ENCRE_PAR_PX_COLLE : c.geste === "mur" ? l * ENCRE_PAR_PX_MUR : 0;
+    if (cout) ecrire(ctx, `−${Math.ceil(cout)}`, xCout, yCout, { align: "left", taille: 18, couleur: cout > j.encre ? ROUGE : CRAYON });
+  }
+}
+
+/** iPhone Duo fermé, tablette debout : la carte en grand, et tous les outils dans une bande sous le pouce. */
+function bande(p: Partie): { x: number; y: number } {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const w = BANDE;
+  // Le trait qui sépare la bande de la carte, du côté de la carte
+  const bord = reglages.gaucher ? w - 1 : 1;
+  trait(ctx, [{ x: bord, y: 4 }, { x: bord, y: PAGE_H - 4 }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 82 });
+  bouton(8, 8, 40, 34, "II", () => (p.pause = true), { taille: 17 });
+  bouton(54, 8, 40, 34, `×${p.vitesse}`, () => (p.vitesse = p.vitesse === 3 ? 1 : p.vitesse + 1), { taille: 17, principal: p.vitesse > 1 });
+  ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
+  ecrire(ctx, String(j.vies), 40, 69, { align: "left", couleur: ROUGE, taille: 28, police: "titre" });
+  const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
+  ecrire(ctx, "vague", w / 2, 96, { taille: 13, couleur: CRAYON });
+  ecrire(ctx, `${Math.max(1, j.vague)}${total}`, w / 2, 116, { police: "titre", taille: 24 });
+  if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => lancerVague(j), { principal: true, sous: "vague 1" , taille: 20 });
+  else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
+    bouton(8, 136, w - 16, 52, `▸ ${j.vague + 1}`, () => lancerVague(j), { sous: `${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)}`, taille: 20 });
+  } else if (j.phase === "jeu" && !j.plan) paragraphe(ctx, "dernière vague !", w / 2, 150, w - 12, { taille: 15, couleur: ROUGE });
+  else if (j.phase === "jeu") paragraphe(ctx, fournitureDue(j) ? "puis une fourniture" : "la vague arrive…", w / 2, 150, w - 12, { taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+  compteurEncre(p, 20, 222, 30, 34, 248);
+  const pouvoirs = j.options.pouvoirs ?? [];
+  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, w / 2, 292 + i * 56));
+  // Le pense-bête des tours, en colonne : le symbole, et son prix à côté
+  const types = j.options.toursDispo;
+  const haut = pouvoirs.length ? 268 + pouvoirs.length * 56 : 268;
+  const rang = Math.min(54, (PAGE_H - 6 - haut) / Math.max(1, types.length));
+  types.forEach((t, i) => {
+    const y = haut + i * rang + rang / 2;
+    const cout = coutPose(j, t);
+    const possible = j.encre >= cout;
+    symbole(ctx, TOURS[t].glyphe, 30, y, Math.min(10, rang * 0.24), possible ? STYLOS[t] : CRAYON, 1.8);
+    ecrire(ctx, String(cout), 52, y + 1, { align: "left", taille: 15, couleur: possible ? STYLOS[t] : CRAYON });
+    zone(4, y - rang / 2, w - 8, rang, () => (p.fiches = [t]));
+  });
+  return { x: 20, y: 222 };
+}
+
+/** iPhone Duo déplié, ordinateur : la page de droite du cahier ouvert, tout ce qu'il faut savoir de la partie. */
+function panneau(p: Partie): { x: number; y: number } {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const w = PANNEAU_W;
+  const x0 = 46;
+  const droite = w - 14;
+  // L'en-tête : la page en titre, et les commandes
+  ecrire(ctx, p.libelle, x0, 30, { align: "left", police: "titre", taille: 28 });
+  bouton(droite - 40, 12, 40, 34, "II", () => (p.pause = true), { taille: 17 });
+  boutonSon(droite - 86, 13);
+  bouton(droite - 134, 12, 42, 34, `×${p.vitesse}`, () => (p.vitesse = p.vitesse === 3 ? 1 : p.vitesse + 1), { taille: 17, principal: p.vitesse > 1 });
+  // Les vies, la vague, l'encre
+  ecrire(ctx, "♥", x0 + 8, 86, { couleur: ROUGE, taille: 30 });
+  ecrire(ctx, String(j.vies), x0 + 28, 87, { align: "left", couleur: ROUGE, taille: 36, police: "titre" });
+  const total = Number.isFinite(j.regles.total) ? ` sur ${j.regles.total}` : "";
+  ecrire(ctx, "vague", x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, `${Math.max(1, j.vague)}${total}`, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
+  compteurEncre(p, x0 + 236, 86, 36, x0 + 262, 116);
+  trait(ctx, [{ x: x0 - 10, y: 128 }, { x: droite, y: 128 }], { couleur: CRAYON, epaisseur: 1, amp: 0.4, graine: 83 });
+  // La vague qui vient : qui, combien, et comment les prendre
+  let y = 150;
+  if (j.phase === "attente") {
+    const tot = Number.isFinite(j.regles.total) ? `${j.regles.total} vagues` : "sans fin";
+    ecrire(ctx, "Vague 1", x0, y, { align: "left", police: "titre", taille: 26 });
+    ecrire(ctx, tot + (p.mode === "defi" && j.options.defi ? ` · défi : ${TEXTE_DEFI[j.options.defi].toLowerCase()}` : ""), x0 + 90, y + 2, { align: "left", taille: 14, couleur: CRAYON });
+  } else if (j.plan) ecrire(ctx, `Vague ${j.vague + 1}`, x0, y, { align: "left", police: "titre", taille: 26 });
+  else ecrire(ctx, j.phase === "jeu" ? "Dernière vague !" : "", x0, y, { align: "left", police: "titre", taille: 26, couleur: ROUGE });
+  y += 30;
+  if (j.plan) {
+    y += listeVague(j.plan, x0, y, droite - x0, 16);
+    // Les conseils, tant qu'il reste de la place avant le bouton
+    for (const it of resume(j.plan)) {
+      if (y > 236) break;
+      const f = ENNEMIS[it.type];
+      y += paragraphe(ctx, `${f.nom.charAt(0).toUpperCase() + f.nom.slice(1)} : ${f.conseil}`, x0, y, droite - x0, { align: "left", taille: 14, couleur: CRAYON }) + 4;
+    }
+  }
+  y = Math.max(y, 262);
+  if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => lancerVague(j), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
+  else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
+    bouton(x0, y, droite - x0, 46, `▸ Appeler la vague ${j.vague + 1}`, () => lancerVague(j), { sous: `elle arrive dans ${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)} d'encre si tu l'appelles`, taille: 20 });
+  } else if (j.phase === "jeu" && j.plan) ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", x0, y + 20, { align: "left", taille: 16, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+  // Les pouvoirs : un gros bouton chacun, son nom à côté
+  const pouvoirs = j.options.pouvoirs ?? [];
+  y = 342;
+  if (pouvoirs.length) {
+    ecrire(ctx, "Pouvoirs", x0, y, { align: "left", taille: 15, couleur: CRAYON });
+    pouvoirs.forEach((k, i) => {
+      const x = x0 + 22 + i * 116;
+      boutonPouvoir(p, k, x, y + 40);
+      const pret = j.recharges[k] <= 0;
+      ecrire(ctx, POUVOIRS[k].nom, x + 28, y + 34, { align: "left", taille: 15, couleur: p.arme === k ? ROUGE : pret ? BLEU : CRAYON });
+      ecrire(ctx, p.arme === k ? "trace !" : pret ? "prêt" : "recharge", x + 28, y + 52, { align: "left", taille: 12, couleur: p.arme === k ? ROUGE : CRAYON });
+    });
+  }
+  // Les tours : symbole, nom, prix ; on touche pour revoir la fiche
+  y = 432;
+  ecrire(ctx, "Les tours : dessine le symbole sur la carte", x0, y, { align: "left", taille: 15, couleur: CRAYON });
+  const types = j.options.toursDispo;
+  const cols = 4;
+  const cw = (droite - x0 + 10) / cols;
+  types.forEach((t, i) => {
+    const cx = x0 - 10 + (i % cols) * cw + cw / 2;
+    const cy = y + 46 + Math.floor(i / cols) * 82;
+    const cout = coutPose(j, t);
+    const possible = j.encre >= cout;
+    symbole(ctx, TOURS[t].glyphe, cx, cy, 13, possible ? STYLOS[t] : CRAYON, 2);
+    ecrire(ctx, TOURS[t].nom, cx, cy + 26, { taille: 14, couleur: possible ? "#2b2d38" : CRAYON });
+    ecrire(ctx, String(cout), cx, cy + 43, { taille: 14, couleur: possible ? STYLOS[t] : CRAYON });
+    zone(cx - cw / 2, cy - 24, cw, 76, () => (p.fiches = [t]));
+  });
+  // Les gestes, pour mémoire
+  y = 624;
+  trait(ctx, [{ x: x0 - 10, y: y - 14 }, { x: droite, y: y - 14 }], { couleur: CRAYON, epaisseur: 1, amp: 0.4, graine: 84 });
+  const g = gestesPermis(j);
+  const gestes = [
+    g.mur && ["trait lent", "un mur"],
+    g.rature && ["trait sec", "une rature"],
+    g.colle && j.options.gestes?.colle !== false && ["boucle", "de la colle"],
+  ].filter(Boolean) as string[][];
+  const gw = (droite - x0) / gestes.length;
+  gestes.forEach(([comment, quoi], i) => {
+    ecrire(ctx, comment, x0 + i * gw, y + 8, { align: "left", taille: 14 });
+    ecrire(ctx, quoi, x0 + i * gw, y + 26, { align: "left", taille: 12, couleur: CRAYON });
+  });
+  ecrire(ctx, "Touche une tour pour l'améliorer, changer sa cible ou la vendre.", x0, y + 60, { align: "left", taille: 13, couleur: CRAYON });
+  return { x: x0 + 236, y: 86 };
 }
 
 /** Un pouvoir dans le bandeau : son icône, sa recharge hachurée qui recule, et un sursaut quand il revient. */

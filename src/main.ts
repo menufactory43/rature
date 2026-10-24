@@ -7,15 +7,17 @@ import * as musique from "./musique";
 import { ENNEMIS } from "./sim/ennemis";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
-import { bureau, coinCorne, dessous } from "./render/bureau";
+import { bureau, coinCorne, dessous, ombrePli, reliure } from "./render/bureau";
 import { ameliorer, blesser, choisirFourniture, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
 import { colleDebloquee, effacer, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
-import { H, W, dessinerAppui, ui } from "./ui/base";
-import { actions, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
+import { surChangement } from "./reglages";
+import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
+import { RELIURE, calculer, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
+import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
 import { dessinerReglages } from "./ui/reglages";
 import { avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
@@ -23,31 +25,34 @@ import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, touch
 
 const canvas = document.getElementById("jeu") as HTMLCanvasElement;
 ui.ctx = canvas.getContext("2d")!;
-let echelle = 1;
-let ox = 0;
-let oy = 0;
-let dpr = 1;
+let vue: Vue = calculer(window.innerWidth, window.innerHeight, 1);
 let fond: HTMLCanvasElement | null = null;
 let table: HTMLCanvasElement | null = null;
-/** Le bord de bureau qu'on laisse voir autour du cahier, même sur un téléphone. */
-const MARGE = 6;
+let tableEnPartie: HTMLCanvasElement | null = null;
 
 function redimensionner(): void {
-  dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const cw = window.innerWidth;
   const ch = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(ch * dpr);
-  echelle = Math.min((cw - MARGE * 2) / W, (ch - MARGE * 2) / H);
-  ox = (cw - W * echelle) / 2;
-  oy = (ch - H * echelle) / 2;
-  fond = papier(W, H, echelle * dpr, "seyes");
-  table = bureau(canvas.width, canvas.height, { x: ox * dpr, y: oy * dpr, w: W * echelle * dpr, h: H * echelle * dpr });
+  vue = calculer(cw, ch, dpr);
+  fond = papier(W, H, vue.m * dpr, "seyes");
+  const enPixels = (f: Rect[]) => {
+    const x = Math.min(...f.map((r) => r.x));
+    const y = Math.min(...f.map((r) => r.y));
+    return { x: x * dpr, y: y * dpr, w: (Math.max(...f.map((r) => r.x + r.w)) - x) * dpr, h: (Math.max(...f.map((r) => r.y + r.h)) - y) * dpr };
+  };
+  table = bureau(canvas.width, canvas.height, enPixels(vue.feuillesMenu));
+  tableEnPartie = vue.mise === "portrait" ? table : bureau(canvas.width, canvas.height, enPixels(vue.feuilles));
 }
 
+/** Les coordonnées du cadre sous le doigt : celles de la carte en partie, celles du menu ailleurs. */
 function versPage(e: PointerEvent): { x: number; y: number } {
   const r = canvas.getBoundingClientRect();
-  return { x: (e.clientX - r.left - ox) / echelle, y: (e.clientY - r.top - oy) / echelle };
+  const m = nav.ecran === "partie" ? vue.carte : vue.menu;
+  const p = m.inverse().transformPoint({ x: (e.clientX - r.left) * vue.dpr, y: (e.clientY - r.top) * vue.dpr });
+  return { x: p.x, y: p.y };
 }
 
 // --- Les parties ---
@@ -82,15 +87,14 @@ nav.ouvrirPage = (p) => jouerPage(p, "campagne");
 
 canvas.addEventListener("pointerdown", (e) => {
   audio.deverrouiller();
-  const p = versPage(e);
-  for (let i = ui.boutons.length - 1; i >= 0; i--) {
-    const b = ui.boutons[i];
-    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
-      if (b.visible !== false) ui.appui = { ...b, depuis: ui.temps };
-      b.action();
-      return;
-    }
+  const r = canvas.getBoundingClientRect();
+  const b = boutonSous((e.clientX - r.left) * vue.dpr, (e.clientY - r.top) * vue.dpr);
+  if (b) {
+    if (b.visible !== false) ui.appui = { ...b, depuis: ui.temps };
+    b.action();
+    return;
   }
+  const p = versPage(e);
   let pris = false;
   if (nav.ecran === "partie") pris = toucherPartie(p.x, p.y, e);
   if (nav.ecran === "trousse") pris = toucherTrousse(p.x, p.y);
@@ -118,6 +122,8 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("blur", mettreEnPause);
 document.addEventListener("visibilitychange", () => document.hidden && mettreEnPause());
 window.addEventListener("resize", redimensionner);
+// Gaucher : la bande passe de l'autre côté de la carte
+surChangement(redimensionner);
 
 // --- On tourne la page ---
 
@@ -197,12 +203,24 @@ function image(maintenant: number): void {
 
   const ctx = ui.ctx;
   ui.boutons = [];
+  const enPartie = nav.ecran === "partie" && !!partie;
+  const feuilles = enPartie ? vue.feuilles : vue.feuillesMenu;
+  const unite = enPartie ? vue.s : vue.m;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (table) ctx.drawImage(table, 0, 0);
-  ctx.setTransform(dpr * echelle, 0, 0, dpr * echelle, ox * dpr, oy * dpr);
-  dessous(ctx, W, H, nav.ecran === "partie" ? partie?.page?.cahier ?? 2 : 1);
-  if (nav.ecran === "partie" && partie) dessinerPartie(echelle * dpr);
+  const t = enPartie ? tableEnPartie : table;
+  if (t) ctx.drawImage(t, 0, 0);
+  // Le cahier : sa couverture et l'épaisseur de ses pages, sous la ou les feuilles
+  const x0 = Math.min(...feuilles.map((f) => f.x));
+  const y0 = Math.min(...feuilles.map((f) => f.y));
+  const lw = (Math.max(...feuilles.map((f) => f.x + f.w)) - x0) / unite;
+  const lh = (Math.max(...feuilles.map((f) => f.y + f.h)) - y0) / unite;
+  const dpr = vue.dpr;
+  ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
+  dessous(ctx, lw, lh, enPartie ? partie?.page?.cahier ?? 2 : 1);
+  if (vue.pli !== null) reliure(ctx, (vue.pli - x0) / unite, lh, RELIURE / unite);
+  if (enPartie) dessinerPartie(vue);
   else {
+    ctx.setTransform(vue.menu);
     if (fond) ctx.drawImage(fond, 0, 0, W, H);
     if (nav.ecran === "titre") dessinerTitre();
     else if (nav.ecran === "aide") dessinerAide();
@@ -210,9 +228,19 @@ function image(maintenant: number): void {
     else if (nav.ecran === "talents") dessinerTalents();
     else if (nav.ecran === "trousse") dessinerTrousse();
     else if (nav.ecran === "reglages") dessinerReglages();
+    if (vue.mise === "ouvert") {
+      ctx.setTransform(pageDroiteMenu(vue));
+      if (fond) ctx.drawImage(fond, 0, 0, W, H);
+      pageDeGarde();
+    }
+  }
+  if (vue.pli !== null) {
+    ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
+    ombrePli(ctx, (vue.pli - x0) / unite, lh, RELIURE / unite);
   }
   dessinerAppui();
-  coinCorne(ctx, W, H);
+  ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
+  coinCorne(ctx, lw, lh);
   tournerPage();
   requestAnimationFrame(image);
 }
@@ -227,6 +255,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
 (window as unknown as { rature: unknown }).rature = {
   get partie() { return partie; },
   get ecran() { return nav.ecran; },
+  get vue() { return vue; },
   sauvegarde: () => sauvegarde,
   effacer,
   jouerPage,

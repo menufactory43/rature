@@ -243,3 +243,35 @@ export function coinCorne(ctx: CanvasRenderingContext2D, w: number, h: number): 
   ctx.fill();
   ctx.restore();
 }
+
+/** Le cahier ouvert : les deux bandes de papier de part et d'autre du pli, où l'on ne pose rien. Coordonnées de page. */
+export function reliure(ctx: CanvasRenderingContext2D, pli: number, h: number, r: number): void {
+  ctx.fillStyle = "#f6efdc";
+  ctx.fillRect(pli - r, 0, r * 2, h);
+}
+
+/** Le creux du pli par-dessus les deux pages : l'ombre qui se fond dans le papier, et la couture. */
+export function ombrePli(ctx: CanvasRenderingContext2D, pli: number, h: number, r: number): void {
+  ctx.save();
+  const l = r * 2.6;
+  const g = ctx.createLinearGradient(pli - l, 0, pli + l, 0);
+  g.addColorStop(0, "rgba(90,60,20,0)");
+  g.addColorStop(0.36, "rgba(90,60,20,0.06)");
+  g.addColorStop(0.48, "rgba(70,45,15,0.2)");
+  g.addColorStop(0.5, "rgba(50,30,10,0.32)");
+  g.addColorStop(0.52, "rgba(70,45,15,0.18)");
+  g.addColorStop(0.66, "rgba(90,60,20,0.05)");
+  g.addColorStop(1, "rgba(90,60,20,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(pli - l, 0, l * 2, h);
+  // Les points de couture du cahier
+  ctx.strokeStyle = "rgba(60,40,20,0.35)";
+  ctx.lineWidth = 0.8;
+  for (const y of [h * 0.18, h * 0.5, h * 0.82]) {
+    ctx.beginPath();
+    ctx.moveTo(pli, y - 9);
+    ctx.lineTo(pli, y + 9);
+    ctx.stroke();
+  }
+  ctx.restore();
+}

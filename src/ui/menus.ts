@@ -270,3 +270,37 @@ export function dessinerTalents(): void {
   });
   bouton(120, H - 62, 160, 44, "Retour", () => nav.aller("campagne"));
 }
+
+const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/** Le cahier ouvert, côté menus : la page d'en face, c'est le pense-bête du joueur (ses tours, les monstres déjà croisés). */
+export function pageDeGarde(): void {
+  const ctx = ui.ctx;
+  const d = new Date();
+  ecrire(ctx, `le ${d.getDate()} ${MOIS[d.getMonth()]}`, W - 24, 40, { align: "right", taille: 18, couleur: CRAYON, rotation: -0.02 });
+  ecrire(ctx, "Mes notes", 50, 92, { align: "left", police: "titre", taille: 44 });
+  souligne(50, 120, 170, 5);
+  ecrire(ctx, "Les tours", 50, 168, { align: "left", police: "titre", taille: 28, couleur: BLEU });
+  const tours = toursDebloquees();
+  tours.forEach((t, i) => {
+    const y = 210 + i * 46;
+    symbole(ctx, TOURS[t].glyphe, 70, y, 12, BLEU, 2);
+    ecrire(ctx, TOURS[t].nom, 98, y - 6, { align: "left", taille: 19 });
+    ecrire(ctx, TOURS[t].role, 98, y + 12, { align: "left", taille: 13, couleur: CRAYON });
+  });
+  let y = 210 + tours.length * 46 + 26;
+  ecrire(ctx, "Les monstres", 50, y, { align: "left", police: "titre", taille: 28, couleur: ROUGE });
+  y += 40;
+  const vus = (Object.keys(ENNEMIS) as TypeEnnemi[]).filter((t) => sauvegarde.vus.includes(t) && !ENNEMIS[t].boss && t !== "petite");
+  if (!vus.length) ecrire(ctx, "(aucun encore : ils viendront bien assez tôt)", 50, y, { align: "left", taille: 15, couleur: CRAYON });
+  for (const t of vus) {
+    if (y > H - 70) break;
+    monstre(ctx, t, 68, y + 4, 10, 3, ui.temps, ROUGE, 0);
+    const f = ENNEMIS[t];
+    y += paragraphe(ctx, `${f.nom.charAt(0).toUpperCase() + f.nom.slice(1)} : ${f.conseil}`, 92, y - 6, W - 120, { align: "left", taille: 14 }) + 10;
+  }
+}
+
+function souligne(x: number, y: number, w: number, graine: number): void {
+  trait(ui.ctx, [{ x, y }, { x: x + w * 0.5, y: y + 3 }, { x: x + w, y: y - 1 }], { couleur: ROUGE, epaisseur: 2.2, graine });
+}
