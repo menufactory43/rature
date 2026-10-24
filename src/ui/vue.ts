@@ -51,7 +51,7 @@ export function miseDe(cw: number, ch: number): Mise {
   return r < 0.62 ? "portrait" : r < 1.05 ? "bande" : "ouvert";
 }
 
-export function calculer(cw: number, ch: number, dpr: number): Vue {
+function calculerDans(cw: number, ch: number, dpr: number): Vue {
   const mise = miseDe(cw, ch);
   // Le cadre des menus, centré dans tout l'écran
   const m0 = Math.min((cw - MARGE * 2) / W, (ch - MARGE * 2) / H);
@@ -99,6 +99,31 @@ export function calculer(cw: number, ch: number, dpr: number): Vue {
       { x: pli, y: ym, w: W * m + RELIURE, h: H * m },
     ],
     pli, s, m,
+  };
+}
+
+/** Les marges de sûreté de l'écran (l'encoche, la barre du bas), en pixels CSS. */
+export interface Encoches {
+  haut: number;
+  droite: number;
+  bas: number;
+  gauche: number;
+}
+
+/** La mise en page dans la partie sûre de l'écran : le bureau déborde dessous, le cahier reste à l'abri de l'encoche. */
+export function calculer(cw: number, ch: number, dpr: number, e: Encoches = { haut: 0, droite: 0, bas: 0, gauche: 0 }): Vue {
+  const v = calculerDans(cw - e.gauche - e.droite, ch - e.haut - e.bas, dpr);
+  const decaler = (m: DOMMatrix) => {
+    const n = DOMMatrix.fromMatrix(m);
+    n.e += e.gauche * dpr;
+    n.f += e.haut * dpr;
+    return n;
+  };
+  const rects = (r: Rect[]) => r.map((f) => ({ ...f, x: f.x + e.gauche, y: f.y + e.haut }));
+  return {
+    ...v,
+    menu: decaler(v.menu), dessus: decaler(v.dessus), carte: decaler(v.carte), panneau: decaler(v.panneau),
+    feuilles: rects(v.feuilles), feuillesMenu: rects(v.feuillesMenu), pli: v.pli === null ? null : v.pli + e.gauche,
   };
 }
 

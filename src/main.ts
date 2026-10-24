@@ -32,13 +32,23 @@ let fond: HTMLCanvasElement | null = null;
 let table: HTMLCanvasElement | null = null;
 let tableEnPartie: HTMLCanvasElement | null = null;
 
+// Une sonde pour lire les marges de sûreté (encoche, Dynamic Island, barre du bas) que le CSS connaît
+const sonde = document.createElement("div");
+sonde.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+document.body.appendChild(sonde);
+
+function encoches() {
+  const c = getComputedStyle(sonde);
+  return { haut: parseFloat(c.paddingTop) || 0, droite: parseFloat(c.paddingRight) || 0, bas: parseFloat(c.paddingBottom) || 0, gauche: parseFloat(c.paddingLeft) || 0 };
+}
+
 function redimensionner(): void {
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const cw = window.innerWidth;
   const ch = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(ch * dpr);
-  vue = calculer(cw, ch, dpr);
+  vue = calculer(cw, ch, dpr, encoches());
   fond = papier(W, H, vue.m * dpr, "seyes");
   const enPixels = (f: Rect[]) => {
     const x = Math.min(...f.map((r) => r.x));
@@ -124,6 +134,15 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("blur", mettreEnPause);
 document.addEventListener("visibilitychange", () => document.hidden && mettreEnPause());
 window.addEventListener("resize", redimensionner);
+// Les marges de sûreté arrivent parfois après le premier affichage (l'app iPhone) : on les surveille
+let encochesVues = "";
+setInterval(() => {
+  const e = JSON.stringify(encoches());
+  if (e !== encochesVues) {
+    encochesVues = e;
+    redimensionner();
+  }
+}, 500);
 // Gaucher : la bande passe de l'autre côté de la carte
 surChangement(redimensionner);
 

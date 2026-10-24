@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- L'icône de l'app, dessinée par le moteur du jeu : `npm run dev`, puis tools/icone.html, et une capture 1024×1024. -->
+<html><body style="margin:0"><canvas id="c" width="1024" height="1024"></canvas>
+<script type="module">
+import "@fontsource/caveat/700.css";
+import { papier } from "../src/render/papier";
+import { BLEU, ROUGE, regler, trait, cercle } from "../src/render/encre";
+import { monstre } from "../src/render/monstres";
+import { dessinerTour } from "../src/render/tours";
+regler(0.3);
+const ctx = document.getElementById("c").getContext("2d");
+const k = 1024 / 150;
+ctx.drawImage(papier(150, 150, k, "seyes"), 0, 0, 1024, 1024);
+ctx.scale(k, k);
+// La tour plume, en bas à gauche, qui vise le monstre
+ctx.save();
+ctx.translate(46, 100);
+ctx.scale(1.6, 1.6);
+dessinerTour(ctx, { type: "plume", x: 0, y: 0, niveau: 3, spec: 0, angle: -0.72, temps: 0.4, id: 3, recul: 0 });
+ctx.restore();
+// Le tir : deux traits d'encre vers le monstre
+trait(ctx, [{ x: 66, y: 83 }, { x: 74, y: 76 }], { couleur: BLEU, epaisseur: 2.6, graine: 5 });
+trait(ctx, [{ x: 79, y: 72 }, { x: 85, y: 67 }], { couleur: BLEU, epaisseur: 2.6, graine: 6 });
+// Le gribouille, en haut à droite, raturé d'un coup sec en rouge
+monstre(ctx, "gribouille", 106, 46, 21, 4, 0.5, ROUGE, 0);
+trait(ctx, [{ x: 84, y: 70 }, { x: 108, y: 46 }, { x: 134, y: 20 }], { couleur: ROUGE, epaisseur: 4.4, graine: 9 });
+trait(ctx, [{ x: 89, y: 72 }, { x: 112, y: 49 }, { x: 137, y: 25 }], { couleur: ROUGE, epaisseur: 1.8, graine: 11, alpha: 0.65 });
+document.title = "pret";
+</script></body></html>
