@@ -2,8 +2,7 @@
 // Safari sur iPhone ne vibre pas : sur le web, rien ne se passe, c'est normal.
 export type Vibration = "leger" | "moyen" | "fort" | "refus";
 
-let actif = true;
-export const reglerVibrations = (oui: boolean) => (actif = oui);
+import { reglages } from "./reglages";
 
 interface Haptics {
   impact(o: { style: "LIGHT" | "MEDIUM" | "HEAVY" }): Promise<void>;
@@ -13,7 +12,7 @@ interface Haptics {
 let dernier = 0;
 
 export function vibrer(v: Vibration): void {
-  if (!actif) return;
+  if (!reglages.vibrations) return;
   // Pas plus d'une vibration toutes les 60 ms : une rafale de morts ne doit pas faire bourdonner le téléphone
   const t = performance.now();
   if (t - dernier < 60 && v === "leger") return;

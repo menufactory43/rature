@@ -13,6 +13,7 @@ import {
 import { grainePageDuJour } from "../sauvegarde";
 import { H, W, bouton, boutonSon, titre, ui, zone } from "./base";
 import { nav } from "./nav";
+import { ouvrirReglages } from "./reglages";
 import { etoile } from "./partie";
 
 export const actions = {
@@ -100,8 +101,9 @@ export function dessinerTitre(): void {
   bouton(60, 560, 280, 64, "Page du jour", () => actions.pageDuJour(), { sous: mj ? `record : ${mj.vagues} vagues, ${mj.vies} vies` : "la même page pour tout le monde" });
   bouton(60, 640, 134, 50, "Comment jouer", () => nav.aller("aide"), { taille: 17 });
   bouton(206, 640, 134, 50, "Trousse", () => nav.aller("trousse"), { taille: 18 });
+  bouton(60, 702, 280, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
   boutonSon(W - 54, 14);
-  paragraphe(ctx, "Dessine tes tours. Trace des murs. Rature les monstres.", W / 2, 726, 320, { couleur: CRAYON, taille: 15 });
+  paragraphe(ctx, "Dessine tes tours. Trace des murs. Rature les monstres.", W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
 }
 
 // --- L'aide, en trois onglets ---

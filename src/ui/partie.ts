@@ -20,8 +20,10 @@ import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
 import { resume, type PlanVague } from "../sim/vagues";
 import { enregistrer, noterPage, sauvegarde } from "../progression";
+import { reglages } from "../reglages";
 import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./base";
 import { nav } from "./nav";
+import { ouvrirReglages } from "./reglages";
 
 export type Mode = "campagne" | "defi" | "sansFin" | "jour";
 
@@ -49,6 +51,8 @@ interface Partie {
   reste: number;
   /** Le pouvoir armé : le prochain trait le lance. */
   arme: Pouvoir | null;
+  /** Les monstres qu'on voit pour la première fois : un post-it chacun, l'un après l'autre. */
+  nouveaux: { type: TypeEnnemi; depuis: number }[];
 }
 
 export let partie: Partie | null = null;
@@ -59,11 +63,11 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, reste: 0, arme: null,
+    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [],
   };
   nav.aller("partie");
   fx.remettreAZero();
-  fx.reglerCibleEncre({ x: 18, y: PAGE_H + 20 });
+  fx.reglerCibleEncre({ x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 });
   audio.jouer(["page"]);
 }
 
@@ -299,10 +303,64 @@ export function dessinerPartie(echelle: number): void {
   bandeauHaut(p);
   bandeauBas(p);
   fx.dessinerEcran(ctx, HAUT, W, H);
+  postitNouveau(p);
   if (p.selection) menuTour(p, p.selection);
   if (p.fiches.length) fiche(p.fiches[0], j);
   if (p.pause) dessinerPause();
   if (p.fin) dessinerFin(p);
+}
+
+const DUREE_POSTIT = 7;
+
+/** Le post-it « nouveau ! » : collé en haut de la page au premier passage d'un monstre jamais vu. */
+function postitNouveau(p: Partie): void {
+  const j = p.jeu;
+  for (const e of j.ennemis) {
+    if (e.mort || sauvegarde.vus.includes(e.type) || e.y < 0) continue;
+    sauvegarde.vus.push(e.type);
+    enregistrer();
+    p.nouveaux.push({ type: e.type, depuis: -1 });
+  }
+  const n = p.nouveaux[0];
+  if (!n) return;
+  if (n.depuis < 0) n.depuis = ui.temps;
+  const t = ui.temps - n.depuis;
+  if (t > DUREE_POSTIT) {
+    p.nouveaux.shift();
+    return;
+  }
+  const ctx = ui.ctx;
+  const f = ENNEMIS[n.type];
+  const w = 176;
+  const h = 128;
+  // Il arrive en se décollant un peu, et repart pareil
+  const entre = Math.min(1, t / 0.25);
+  const sort = t > DUREE_POSTIT - 0.3 ? (t - (DUREE_POSTIT - 0.3)) / 0.3 : 0;
+  const x = W - w - 12 + sort * (w + 20);
+  const y = HAUT + 12 - (1 - entre) * 30;
+  // Un toucher le décolle
+  zone(W - w - 12, HAUT + 12, w, h, () => p.nouveaux.shift());
+  ctx.save();
+  ctx.globalAlpha = entre * (1 - sort);
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(0.03 - (1 - entre) * 0.1);
+  ctx.fillStyle = "rgba(40,30,10,0.18)";
+  ctx.fillRect(-w / 2 + 3, -h / 2 + 5, w, h);
+  ctx.fillStyle = "#fbe98a";
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.fillRect(-w / 2, -h / 2, w, 18);
+  // Le scotch
+  ctx.fillStyle = "rgba(235,235,220,0.7)";
+  ctx.save();
+  ctx.rotate(-0.08);
+  ctx.fillRect(-26, -h / 2 - 8, 52, 16);
+  ctx.restore();
+  ecrire(ctx, "nouveau !", -w / 2 + 10, -h / 2 + 18, { align: "left", taille: 15, couleur: ROUGE, rotation: -0.05 });
+  monstre(ctx, n.type, w / 2 - 30, -h / 2 + 32, Math.min(16, f.rayon * 1.1), 3, ui.temps, ROUGE, 0);
+  ecrire(ctx, f.nom, -w / 2 + 10, -h / 2 + 46, { align: "left", police: "titre", taille: 22 });
+  paragraphe(ctx, f.conseil, 0, -h / 2 + 72, w - 20, { taille: 13, couleur: "#3d3f4a" });
+  ctx.restore();
 }
 
 /** Les conseils des premières pages : le tutoriel, au fil de la partie. */
@@ -323,6 +381,7 @@ function astuce(p: Partie): string | null {
   if (id === "1-3" && present("avion")) return "Les avions volent par-dessus les murs. Les ratures les arrêtent.";
   if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
   if (id === "1-4" && present("tache")) return "Les taches rongent les murs, et se divisent en mourant.";
+  if (id === "2-1" && j.vague <= 2) return "Les cadres « ne rien écrire » : la horde y passe, mais aucune tour ne s'y pose.";
   // Les pouvoirs, la première fois qu'on les a
   const nouveau = (k: Pouvoir, page: string) => id === page && j.vague >= 2 && j.recharges[k] <= 0 && j.options.pouvoirs?.includes(k);
   if (nouveau("regle", "1-2")) return "Nouveau : la règle, en bas à droite. Touche-la, puis trace une ligne sur la horde.";
@@ -469,24 +528,26 @@ function bandeauBas(p: Partie): void {
   const ctx = ui.ctx;
   const j = p.jeu;
   const y0 = HAUT + PAGE_H;
+  // Pour les gauchers, l'encre passe à droite et les pouvoirs sous le pouce gauche
+  const xe = reglages.gaucher ? W - 120 : 0;
   // L'encre : la seule monnaie
   ctx.fillStyle = BLEU;
   ctx.beginPath();
-  ctx.moveTo(18, y0 + 8);
-  ctx.quadraticCurveTo(28, y0 + 22, 18, y0 + 30);
-  ctx.quadraticCurveTo(8, y0 + 22, 18, y0 + 8);
+  ctx.moveTo(xe + 18, y0 + 8);
+  ctx.quadraticCurveTo(xe + 28, y0 + 22, xe + 18, y0 + 30);
+  ctx.quadraticCurveTo(xe + 8, y0 + 22, xe + 18, y0 + 8);
   ctx.fill();
   const pulse = fx.pulseEncre();
-  ecrire(ctx, String(Math.floor(j.encre)), 34, y0 + 21, { align: "left", police: "titre", taille: 30 * (1 + pulse * 0.18), couleur: pulse > 0.5 ? "#3a5fc4" : BLEU });
+  ecrire(ctx, String(Math.floor(j.encre)), xe + 34, y0 + 21, { align: "left", police: "titre", taille: 30 * (1 + pulse * 0.18), couleur: pulse > 0.5 ? "#3a5fc4" : BLEU });
   if (p.trace && p.trace.length > 1 && !p.arme) {
     const l = polylineLength(p.trace);
     const c = classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]);
     const cout = c.geste === "tour" ? coutPose(j, tourDe(c.glyphe!)) : c.geste === "rature" ? coutRature(l) : c.geste === "cercle" ? l * ENCRE_PAR_PX_COLLE : c.geste === "mur" ? l * ENCRE_PAR_PX_MUR : 0;
-    if (cout) ecrire(ctx, `−${Math.ceil(cout)}`, 100, y0 + 22, { align: "left", taille: 20, couleur: cout > j.encre ? ROUGE : CRAYON });
+    if (cout) ecrire(ctx, `−${Math.ceil(cout)}`, reglages.gaucher ? xe - 8 : 100, y0 + 22, { align: reglages.gaucher ? "right" : "left", taille: 20, couleur: cout > j.encre ? ROUGE : CRAYON });
   }
   // Les pouvoirs, à droite ; les gestes permis, tant qu'il reste de la place
   const pouvoirs = j.options.pouvoirs ?? [];
-  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, W - 30 - (pouvoirs.length - 1 - i) * 50, y0 + 20));
+  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, reglages.gaucher ? 30 + i * 50 : W - 30 - (pouvoirs.length - 1 - i) * 50, y0 + 20));
   const g = gestesPermis(j);
   const gestes = [
     g.mur && ["mur", "lent"],
@@ -664,7 +725,8 @@ function dessinerPause(): void {
   bouton(90, 300, 220, 56, "Reprendre", () => partie && (partie.pause = false), { principal: true });
   bouton(90, 376, 220, 50, "Recommencer la page", recommencer, { taille: 19 });
   bouton(90, 446, 220, 50, "Quitter la page", () => nav.aller(partie?.mode === "jour" ? "titre" : "campagne"), { taille: 19 });
-  boutonSon(W / 2 - 20, 526);
+  bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
+  boutonSon(262, 522);
 }
 
 function etoile(x: number, y: number, r: number, pleine: boolean, graine: number): void {

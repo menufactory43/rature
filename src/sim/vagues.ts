@@ -11,6 +11,8 @@ export interface ReglesVagues {
   difficulte: number;
   /** Le boss de la dernière vague (et, en sans fin, toutes les 10 vagues). */
   boss?: TypeEnnemi;
+  /** Un boss toutes les 10 vagues, chacun son tour (l'interro surprise). */
+  bossTous?: TypeEnnemi[];
   entrees: number;
 }
 
@@ -36,11 +38,13 @@ export function premiereVague(r: ReglesVagues, i: number): number {
   return Math.max(2, Math.round((i * etendue) / (r.pool.length + 0.5)));
 }
 
-export const estVagueBoss = (r: ReglesVagues, n: number) => !!r.boss && (Number.isFinite(r.total) ? n === r.total : n % 10 === 0);
+export const estVagueBoss = (r: ReglesVagues, n: number) =>
+  r.bossTous ? n % 10 === 0 : !!r.boss && (Number.isFinite(r.total) ? n === r.total : n % 10 === 0);
+const bossDe = (r: ReglesVagues, n: number) => (r.bossTous ? r.bossTous[(n / 10 - 1) % r.bossTous.length] : r.boss);
 
 export function planifier(r: ReglesVagues, n: number): PlanVague {
   const rng = new Rng(r.graine ^ Math.imul(n, 0x9e3779b1));
-  const boss = estVagueBoss(r, n) ? r.boss : undefined;
+  const boss = estVagueBoss(r, n) ? bossDe(r, n) : undefined;
   let reste = budget(n) * (boss ? 0.5 : 1);
   const dispo = r.pool.filter((t, i) => premiereVague(r, i) <= n && ENNEMIS[t].cout > 0);
   const nouveaux = r.pool.filter((_, i) => premiereVague(r, i) === n);

@@ -1,16 +1,36 @@
 // Les sons, synthétisés (aucun fichier) : le grattement du stylo, les pops d'encre, la page qui tourne.
 import type { Son } from "./sim/jeu";
+import { reglages, surChangement } from "./reglages";
 
 let ctx: AudioContext | null = null;
 let bruit: AudioBuffer | null = null;
 let grattement: { gain: GainNode; filtre: BiquadFilterNode } | null = null;
+/** Tout passe par là : coupé, plus rien ne sort. */
+let maitre: GainNode | null = null;
+let busEffets: GainNode | null = null;
+let busMusique: GainNode | null = null;
 export let actif = localStorage.getItem("rature.son") !== "non";
+
+function volumes(): void {
+  if (!ctx || !maitre || !busEffets || !busMusique) return;
+  const t = ctx.currentTime;
+  maitre.gain.setTargetAtTime(actif ? 1 : 0, t, 0.05);
+  busEffets.gain.setTargetAtTime(reglages.effets, t, 0.05);
+  busMusique.gain.setTargetAtTime(reglages.musique * 0.5, t, 0.05);
+}
+surChangement(volumes);
 
 export function basculer(): boolean {
   actif = !actif;
   localStorage.setItem("rature.son", actif ? "oui" : "non");
   if (!actif) gratter(0);
+  volumes();
   return actif;
+}
+
+/** Pour la musique : le contexte, son bus et le bruit blanc partagé (null tant que le son n'est pas déverrouillé). */
+export function contexte(): { ctx: AudioContext; sortie: GainNode; bruit: AudioBuffer } | null {
+  return ctx && busMusique && bruit ? { ctx, sortie: busMusique, bruit } : null;
 }
 
 /** À appeler sur le premier geste (iOS n'ouvre le son qu'au toucher). */
@@ -20,6 +40,13 @@ export function deverrouiller(): void {
     return;
   }
   ctx = new AudioContext();
+  maitre = ctx.createGain();
+  maitre.connect(ctx.destination);
+  busEffets = ctx.createGain();
+  busEffets.connect(maitre);
+  busMusique = ctx.createGain();
+  busMusique.connect(maitre);
+  volumes();
   bruit = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = bruit.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -32,7 +59,7 @@ export function deverrouiller(): void {
   filtre.Q.value = 0.8;
   const gain = ctx.createGain();
   gain.gain.value = 0;
-  src.connect(filtre).connect(gain).connect(ctx.destination);
+  src.connect(filtre).connect(gain).connect(busEffets!);
   src.start();
   grattement = { gain, filtre };
 }
@@ -55,7 +82,7 @@ function bip(freq: number, duree: number, type: OscillatorType, volume: number, 
   if (glisse) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * glisse), t + duree);
   g.gain.setValueAtTime(volume, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + duree);
-  o.connect(g).connect(ctx.destination);
+  o.connect(g).connect(busEffets!);
   o.start(t);
   o.stop(t + duree);
 }
@@ -72,7 +99,7 @@ function souffle(duree: number, freq: number, volume: number, q = 1): void {
   const g = ctx.createGain();
   g.gain.setValueAtTime(volume, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + duree);
-  s.connect(f).connect(g).connect(ctx.destination);
+  s.connect(f).connect(g).connect(busEffets!);
   s.start(t, Math.random() * 0.5);
   s.stop(t + duree);
 }
@@ -80,7 +107,7 @@ function souffle(duree: number, freq: number, volume: number, q = 1): void {
 const dernier: Partial<Record<Son, number>> = {};
 
 export function jouer(sons: Son[]): void {
-  if (!ctx || !actif) return;
+  if (!ctx || !actif || reglages.effets <= 0) return;
   const maintenant = ctx.currentTime;
   for (const s of new Set(sons)) {
     // Pas plus d'un même son toutes les 50 ms (une rafale de pops reste lisible)

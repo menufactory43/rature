@@ -5,6 +5,7 @@ import type { V } from "../sim/geom";
 import type { Jeu } from "../sim/jeu";
 import { BLEU, CRAYON, ROUGE, ecrire, pointsCercle, trait } from "./encre";
 import { vibrer } from "../vibre";
+import { reglages } from "../reglages";
 import { monstre } from "./monstres";
 
 type Genre = "goutte" | "tache" | "fumee" | "tiret" | "anneau" | "papier" | "etincelle" | "plus" | "encre";
@@ -78,6 +79,8 @@ export const reglerCibleEncre = (p: V) => (cibleEncre = p);
 const hasard = (a: number, b: number) => a + Math.random() * (b - a);
 
 function ajouter(genre: Genre, x: number, y: number, o: Partial<Particule> = {}): void {
+  // Effets réduits : une particule décorative sur trois seulement (l'encre qui vole au compteur reste)
+  if (reglages.effetsReduits && genre !== "encre" && Math.random() < 0.66) return;
   if (fx.particules.length > 700) fx.particules.splice(0, 100);
   fx.particules.push({ genre, x, y, vx: 0, vy: 0, age: 0, vie: 0.5, r: 2, rot: Math.random() * 6.28, vr: 0, couleur: ROUGE, graine: (Math.random() * 1e6) | 0, ...o });
 }
@@ -91,6 +94,7 @@ function gicler(x: number, y: number, n: number, couleur: string, vitesse: numbe
 }
 
 function secouer(force: number): void {
+  if (reglages.effetsReduits) return;
   fx.secousse = Math.max(fx.secousse, force);
 }
 
@@ -527,7 +531,7 @@ export function dessinerEcran(ctx: CanvasRenderingContext2D, haut: number, large
     const g = ctx.createRadialGradient(largeur / 2, hauteur / 2, hauteur * 0.25, largeur / 2, hauteur / 2, hauteur * 0.7);
     g.addColorStop(0, "rgba(0,0,0,0)");
     g.addColorStop(1, fx.flashCouleur);
-    ctx.globalAlpha = fx.flash * 0.45;
+    ctx.globalAlpha = fx.flash * (reglages.effetsReduits ? 0.12 : 0.45);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, largeur, hauteur);
     ctx.restore();

@@ -38,6 +38,10 @@ export interface Carte {
   bloque: Uint8Array;
   /** 1 = café (grille fine). */
   cafe: Uint8Array;
+  /** 1 = cadre « ne rien écrire » : la horde y passe, aucune tour ne s'y pose (grille fine). */
+  interdit: Uint8Array;
+  /** Les cadres, en pixels, pour les dessiner. */
+  cadres: { x: number; y: number; w: number; h: number }[];
   blocs: Bloc[];
 }
 
@@ -49,6 +53,8 @@ export function lireCarte(nom: string, texte: string, papier: Papier = "seyes"):
   if (lignes.length !== HAUTEUR / GROS) throw new Error(`${nom} : ${lignes.length} lignes au lieu de ${HAUTEUR / GROS}`);
   const bloque = new Uint8Array(COLS * LIGNES);
   const cafe = new Uint8Array(COLS * LIGNES);
+  const interdit = new Uint8Array(COLS * LIGNES);
+  const casesCadre = new Set<number>();
   const blocs: Bloc[] = [];
   const entreesCases: { c: number; l: number }[] = [];
   const coeurs: V[] = [];
@@ -61,13 +67,35 @@ export function lireCarte(nom: string, texte: string, papier: Papier = "seyes"):
       if (ch === "#") { marquer(bloque); blocs.push({ x: c * GROS, y: l * GROS, type: "tache" }); }
       else if (ch === "o") { marquer(bloque); blocs.push({ x: c * GROS, y: l * GROS, type: "trou" }); }
       else if (ch === "~") { marquer(cafe); blocs.push({ x: c * GROS, y: l * GROS, type: "cafe" }); }
+      else if (ch === "x") { marquer(interdit); casesCadre.add(l * 100 + c); }
       else if (ch === "E") entreesCases.push({ c, l });
       else if (ch === "C") coeurs.push({ x: c * GROS + GROS / 2, y: l * GROS + GROS / 2 });
     });
   });
   if (!coeurs.length) throw new Error(`${nom} : pas de Cœur`);
   const coeur = { x: coeurs.reduce((s, p) => s + p.x, 0) / coeurs.length, y: coeurs.reduce((s, p) => s + p.y, 0) / coeurs.length };
-  return { nom, papier, entrees: grouperEntrees(entreesCases), coeur, bloque, cafe, blocs };
+  return { nom, papier, entrees: grouperEntrees(entreesCases), coeur, bloque, cafe, interdit, cadres: cadres(casesCadre), blocs };
+}
+
+/** Les cases « x » voisines forment un cadre ; on garde son rectangle englobant. */
+function cadres(cases: Set<number>): { x: number; y: number; w: number; h: number }[] {
+  const vues = new Set<number>();
+  const res: { x: number; y: number; w: number; h: number }[] = [];
+  for (const k of cases) {
+    if (vues.has(k)) continue;
+    let c0 = 99, c1 = -1, l0 = 99, l1 = -1;
+    const pile = [k];
+    vues.add(k);
+    while (pile.length) {
+      const q = pile.pop()!;
+      const c = q % 100;
+      const l = Math.floor(q / 100);
+      c0 = Math.min(c0, c); c1 = Math.max(c1, c); l0 = Math.min(l0, l); l1 = Math.max(l1, l);
+      for (const v of [q + 1, q - 1, q + 100, q - 100]) if (cases.has(v) && !vues.has(v)) { vues.add(v); pile.push(v); }
+    }
+    res.push({ x: c0 * GROS, y: l0 * GROS, w: (c1 - c0 + 1) * GROS, h: (l1 - l0 + 1) * GROS });
+  }
+  return res;
 }
 
 /** Les cases « E » voisines forment une seule entrée ; les monstres apparaissent juste derrière le bord le plus proche. */

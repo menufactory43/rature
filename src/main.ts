@@ -3,6 +3,8 @@ import "@fontsource/caveat/700.css";
 import "@fontsource/patrick-hand/400.css";
 import "./style.css";
 import * as audio from "./audio";
+import * as musique from "./musique";
+import { ENNEMIS } from "./sim/ennemis";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
 import { ameliorer, blesser, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
@@ -14,6 +16,7 @@ import { grainePageDuJour } from "./sauvegarde";
 import { H, W, dessinerAppui, ui } from "./ui/base";
 import { actions, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
+import { dessinerReglages } from "./ui/reglages";
 import { avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
 import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, toucherTrousse } from "./ui/trousse";
 
@@ -151,6 +154,26 @@ function tournerPage(): void {
 
 // --- La boucle ---
 
+let phaseAvant = "";
+
+/** La musique suit ce qui se passe : menus, attente, vague, boss ; un petit air à la fin de la page. */
+function choisirMusique(): void {
+  const p = partie;
+  if (nav.ecran !== "partie" || !p) {
+    phaseAvant = "";
+    musique.ambiance("menu", { graine: 0, cahier: 0 });
+    return;
+  }
+  const j = p.jeu;
+  if (j.phase !== phaseAvant && (j.phase === "gagne" || j.phase === "perdu")) musique.jingle(j.phase);
+  phaseAvant = j.phase;
+  const o = { graine: j.regles.graine, cahier: p.page?.cahier ?? 2, danger: j.vies < j.viesMax * 0.3 ? 1 : 0 };
+  if (j.phase === "gagne" || j.phase === "perdu") musique.ambiance("silence", o);
+  else if (j.ennemis.some((e) => !e.mort && ENNEMIS[e.type].boss)) musique.ambiance("boss", o);
+  else if (j.phase === "jeu" && (j.ennemis.length || j.file.length)) musique.ambiance("vague", o);
+  else musique.ambiance("calme", o);
+}
+
 let avant = performance.now();
 
 function image(maintenant: number): void {
@@ -159,6 +182,7 @@ function image(maintenant: number): void {
   ui.temps += dt;
   regler(ui.temps);
   if (nav.ecran === "partie") avancerPartie(dt);
+  choisirMusique();
 
   const ctx = ui.ctx;
   ui.boutons = [];
@@ -176,6 +200,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "campagne") dessinerCampagne();
     else if (nav.ecran === "talents") dessinerTalents();
     else if (nav.ecran === "trousse") dessinerTrousse();
+    else if (nav.ecran === "reglages") dessinerReglages();
   }
   dessinerAppui();
   tournerPage();

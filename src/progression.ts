@@ -35,12 +35,14 @@ export interface Sauvegarde {
   jour: Record<string, { vagues: number; vies: number }>;
   /** Les tours dont on a vu la page d'apprentissage. */
   appris: string[];
+  /** Les monstres déjà présentés par leur post-it. */
+  vus: string[];
 }
 
 const CLE = "rature.sauvegarde.v2";
 
 function vide(): Sauvegarde {
-  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [] };
+  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [] };
 }
 
 export let sauvegarde: Sauvegarde = charger();

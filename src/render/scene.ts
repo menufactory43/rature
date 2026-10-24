@@ -15,6 +15,7 @@ import { dessinerTour } from "./tours";
 /** Les obstacles et les gribouillis des marges ne bougent pas : on les dessine une fois par carte (sur le papier). */
 export function decor(ctx: CanvasRenderingContext2D, carte: Carte): void {
   griffonnages(ctx, carte);
+  for (const c of carte.cadres) cadre(ctx, c);
   const taches = carte.blocs.filter((b) => b.type === "tache");
   const trous = carte.blocs.filter((b) => b.type === "trou");
   const cafes = carte.blocs.filter((b) => b.type === "cafe");
@@ -194,6 +195,40 @@ function griffonnages(ctx: CanvasRenderingContext2D, carte: Carte): void {
     }
     ctx.restore();
   }
+}
+
+/** Le cadre « ne rien écrire », comme sur une copie d'examen : double trait, hachures légères au crayon, et la consigne. */
+function cadre(ctx: CanvasRenderingContext2D, c: { x: number; y: number; w: number; h: number }): void {
+  const g = c.x * 13 + c.y * 7;
+  const m = 3;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(c.x + m, c.y + m, c.w - m * 2, c.h - m * 2);
+  ctx.clip();
+  ctx.fillStyle = "rgba(120,122,135,0.06)";
+  ctx.fillRect(c.x, c.y, c.w, c.h);
+  ctx.strokeStyle = "rgba(90,92,105,0.2)";
+  ctx.lineWidth = 0.9;
+  for (let d = -c.h; d < c.w; d += 9) {
+    ctx.beginPath();
+    ctx.moveTo(c.x + d + hash3(g, d, 1) * 2, c.y + c.h);
+    ctx.lineTo(c.x + d + c.h + hash3(g, d, 2) * 2, c.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+  rectangle(ctx, c.x + m, c.y + m, c.w - m * 2, c.h - m * 2, { couleur: "rgba(60,62,75,0.7)", epaisseur: 1.4, amp: 0.2, graine: g });
+  rectangle(ctx, c.x + m + 3, c.y + m + 3, c.w - m * 2 - 6, c.h - m * 2 - 6, { couleur: "rgba(60,62,75,0.45)", epaisseur: 0.8, amp: 0.2, graine: g + 1 });
+  // La consigne, à l'horizontale si la place le permet, sinon le long du cadre
+  const texte = c.w >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : c.w >= 80 ? "NE RIEN ÉCRIRE" : "INTERDIT";
+  ctx.save();
+  if (c.w >= 80 || c.w >= c.h) {
+    ecrire(ctx, texte, c.x + c.w / 2, c.y + c.h / 2 + 1, { taille: 10, couleur: "rgba(60,62,75,0.55)" });
+  } else {
+    ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ecrire(ctx, c.h >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : "NE RIEN ÉCRIRE", 0, 1, { taille: 10, couleur: "rgba(60,62,75,0.55)" });
+  }
+  ctx.restore();
 }
 
 export function coeur(ctx: CanvasRenderingContext2D, x: number, y: number, taille: number, battement: number, graine = 5, fele = 0): void {

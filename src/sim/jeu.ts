@@ -8,8 +8,9 @@ import { dist, pointInPolygon, pointSegDist, polylineDist, polylineLength, resam
 import type { Glyphe } from "./glyphes";
 import { classer, type Geste, type Pt } from "./gestures";
 import { LARGEUR_REGLE, LONGUEUR_REGLE, POUVOIRS, type Pouvoir } from "./pouvoirs";
+import { VAGUES_ENTRE_CHOIX, appliquer, boostNeutre, tirer, type Boost, type Fourniture } from "./interro";
 import { Rng } from "./rng";
-import { PORTEE_INFINIE, RAYON_TOUR, TOURS, prochainCout, pvTour, statsTour, tourDuGlyphe, type Stats, type TypeTour } from "./tours";
+import { PORTEE_INFINIE, RAYON_TOUR, TOURS, TYPES_TOURS as TYPES_TOURS_LISTE, prochainCout, pvTour, statsTour, tourDuGlyphe, type Stats, type TypeTour } from "./tours";
 import { estVagueBoss, planifier, type PlanVague, type ReglesVagues } from "./vagues";
 
 export { LARGEUR, HAUTEUR };
@@ -49,6 +50,8 @@ export interface Options {
   defi?: Defi;
   /** Les pouvoirs que le joueur a gagnés. */
   pouvoirs?: Pouvoir[];
+  /** L'interro surprise : une fourniture à choisir toutes les deux vagues. */
+  interro?: boolean;
 }
 
 // --- L'état ---
@@ -69,6 +72,9 @@ export interface Tour {
   angle: number;
   cible: Priorite;
   investi: number;
+  /** Les fournitures de l'interro (partagé par toutes les tours du type). */
+  boost?: Boost;
+  cache?: { cle: string; s: Stats };
   /** Petit recul visuel au tir. */
   recul: number;
 }
@@ -239,6 +245,12 @@ export interface Jeu {
   rendus: Rendu[];
   /** Secondes avant que chaque pouvoir soit de nouveau prêt. */
   recharges: Record<Pouvoir, number>;
+  /** L'interro : les fournitures par type de tour, les modificateurs, le choix en attente, ce qui a été pris. */
+  boosts: Record<TypeTour, Boost>;
+  mods: { recharge: number; pvMonstres: number };
+  choix: Fourniture[] | null;
+  choixFait: number;
+  prises: string[];
 }
 
 export function nouveauJeu(options: Options): Jeu {
@@ -246,13 +258,15 @@ export function nouveauJeu(options: Options): Jeu {
   const vies = (options.vies ?? 20) + talents.vies;
   const encre = (options.encreDepart + talents.encreDepart) * (options.defi === "encreMoitie" ? 0.5 : 1);
   const j: Jeu = {
-    options, carte: options.carte, champ: new Champ(options.carte), regles: options.regles, talents,
+    options, carte: options.carte, champ: new Champ(options.carte), regles: options.regles, talents: { ...talents },
     phase: "attente", vague: 0, plan: planifier(options.regles, 1), prochaine: null, file: [],
     encre, vies, viesMax: vies,
     tours: [], ennemis: [], murs: [], colles: [], zones: [], tirs: [], effets: [], eclats: [],
     temps: 0, champSale: true, dernierCalcul: -1, trajets: [], rng: new Rng(options.regles.graine ^ 0x7f4a7c15),
     stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0 },
     prochainId: 1, sons: [], evts: [], rendus: [], recharges: { regle: 0, lasso: 0, gomme: 0 },
+    boosts: Object.fromEntries(TYPES_TOURS_LISTE.map((t) => [t, boostNeutre()])) as Record<TypeTour, Boost>,
+    mods: { recharge: 1, pvMonstres: 1 }, choix: null, choixFait: 0, prises: [],
   };
   recalculer(j);
   return j;
@@ -278,12 +292,34 @@ export const pvSegment = (j: Jeu) => 30 * j.talents.murPv * (1 + 0.04 * Math.max
 export const valeurRevente = (t: Tour) => Math.floor(t.investi * 0.6);
 /** Longueur qu'on peut encore tracer avant que le stylo sèche (au tarif d'un mur). */
 export const longueurPossible = (j: Jeu) => j.encre / ENCRE_PAR_PX_MUR;
-export const stats = (t: Tour): Stats => statsTour(t.type, t.niveau, t.spec);
+export function stats(t: Tour): Stats {
+  const base = statsTour(t.type, t.niveau, t.spec);
+  const b = t.boost;
+  if (!b || (b.degats === 1 && b.cadence === 1 && b.portee === 1)) return base;
+  const cle = `${t.niveau}/${t.spec}/${b.version}`;
+  if (t.cache?.cle !== cle) {
+    const portee = base.portee >= PORTEE_INFINIE ? base.portee : base.portee * b.portee;
+    t.cache = { cle, s: { ...base, degats: base.degats * b.degats, dps: base.dps && base.dps * b.degats, intervalle: base.intervalle / b.cadence, portee } };
+  }
+  return t.cache.s;
+}
+
+/** Choisir une des fournitures proposées (l'interro). */
+export function choisirFourniture(j: Jeu, i: number): boolean {
+  const f = j.choix?.[i];
+  if (!f) return false;
+  appliquer(j, f);
+  j.choix = null;
+  j.choixFait = j.vague;
+  j.sons.push("coche");
+  return true;
+}
 
 // --- Le déroulé des vagues ---
 
 /** Lance la première vague, ou appelle la suivante en avance (bonus d'encre). */
 export function lancerVague(j: Jeu): void {
+  if (j.choix) return;
   if (j.phase === "attente") {
     j.phase = "jeu";
     demarrerVague(j);
@@ -341,6 +377,7 @@ export function refusPose(j: Jeu, x: number, y: number): string | null {
   if (dist({ x, y }, j.carte.coeur) < 30) return "trop près du Cœur";
   if (j.carte.entrees.some((e) => dist({ x, y }, e.bord) < 26)) return "sur une entrée";
   for (let dy = -8; dy <= 8; dy += 8) for (let dx = -8; dx <= 8; dx += 8) if (j.carte.bloque[caseDe(x + dx, y + dy)]) return "sur un obstacle";
+  if (j.carte.interdit[caseDe(x, y)]) return "on n'écrit pas dans ce cadre";
   if (j.tours.some((t) => Math.hypot(t.x - x, t.y - y) < RAYON_TOUR * 2 + 4)) return "trop près d'une autre tour";
   if (j.options.defi === "quatreTours" && j.tours.length >= 4) return "4 tours maximum (défi)";
   return null;
@@ -356,7 +393,7 @@ export function poserTour(j: Jeu, type: TypeTour, x: number, y: number): Resulta
   j.encre -= cout;
   j.stats.encreDepensee += cout;
   const pv = pvTour(1, 0);
-  j.tours.push({ id: j.prochainId++, type, x, y, niveau: 1, spec: 0, pv, pvMax: pv, cd: 0.3, angle: -Math.PI / 2, cible: "premier", investi: cout, recul: 0 });
+  j.tours.push({ id: j.prochainId++, type, x, y, niveau: 1, spec: 0, pv, pvMax: pv, cd: 0.3, angle: -Math.PI / 2, cible: "premier", investi: cout, recul: 0, boost: j.options.interro ? j.boosts[type] : undefined });
   j.stats.toursPosees++;
   j.champSale = true;
   effet(j, "pose", x, y, 0.5);
@@ -535,7 +572,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
     j.evts.push({ k: "pouvoir", p, x: z.x, y: z.y, r: z.r, pts: [], touches });
     j.sons.push("rature");
   }
-  j.recharges[p] = POUVOIRS[p].recharge;
+  j.recharges[p] = POUVOIRS[p].recharge * j.mods.recharge;
   return res(true, undefined, touches);
 }
 
@@ -591,7 +628,7 @@ export function apercuTrajets(j: Jeu, ajout: { mur?: V[]; tour?: V }): V[][] {
 
 export function ajouterEnnemi(j: Jeu, type: TypeEnnemi, x: number, y: number, vague = j.vague): Ennemi {
   const f = ENNEMIS[type];
-  const pv = f.pv * j.regles.difficulte * echellePv(Math.max(1, vague)) * (Number.isFinite(j.regles.total) ? 1 : 1 + Math.max(0, vague - 20) * 0.04);
+  const pv = f.pv * j.mods.pvMonstres * j.regles.difficulte * echellePv(Math.max(1, vague)) * (Number.isFinite(j.regles.total) ? 1 : 1 + Math.max(0, vague - 20) * 0.04);
   const e: Ennemi = {
     id: j.prochainId++, type, x, y, vx: 0, vy: 0, pv, pvMax: pv, bouclier: (f.bouclier ?? 0) * j.regles.difficulte * echellePv(Math.max(1, vague)), r: f.rayon,
     age: 0, zig: (j.prochainId * 1.7) % 6.28, bloque: false, englue: 0, etourdi: 0, marque: 0, revele: 0, acide: 0, ralenti: 0,
@@ -776,6 +813,9 @@ export function step(j: Jeu, dt: number): void {
         j.phase = "gagne";
         j.sons.push("page");
       }
+    } else if (j.options.interro && j.vague > j.choixFait && j.vague % VAGUES_ENTRE_CHOIX === 0 && !j.ennemis.length) {
+      // L'interro : la page est vide, on choisit sa fourniture avant la suite
+      if (!j.choix) j.choix = tirer(j);
     } else {
       if (j.prochaine === null) j.prochaine = DELAI_VAGUE;
       // Page vide : on n'attend pas pour rien

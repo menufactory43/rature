@@ -1,7 +1,7 @@
 // Le changement d'écran, partagé par tous les écrans sans dépendance circulaire.
 import type { Page } from "../sim/pages";
 
-export type Ecran = "titre" | "aide" | "campagne" | "talents" | "trousse" | "partie";
+export type Ecran = "titre" | "aide" | "campagne" | "talents" | "trousse" | "partie" | "reglages";
 
 export const nav = {
   ecran: "titre" as Ecran,
