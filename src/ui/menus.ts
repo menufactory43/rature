@@ -14,6 +14,7 @@ import { grainePageDuJour } from "../sauvegarde";
 import { H, W, bouton, boutonSon, titre, ui, zone } from "./base";
 import { nav } from "./nav";
 import { ouvrirReglages } from "./reglages";
+import { ouvrirCoop } from "./coop";
 import { etoile } from "./partie";
 
 export const actions = {
@@ -104,7 +105,8 @@ export function dessinerTitre(): void {
   bouton(206, 560, 134, 64, "Interro", () => actions.interro(), { taille: 19, sous: ri ? `record : ${Math.round((ri / 30) * 20)}/20` : "surprise !" });
   bouton(60, 640, 134, 50, "Comment jouer", () => nav.aller("aide"), { taille: 17 });
   bouton(206, 640, 134, 50, "Trousse", () => nav.aller("trousse"), { taille: 18 });
-  bouton(60, 702, 280, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
+  bouton(60, 702, 134, 44, "À deux", () => ouvrirCoop(), { taille: 19 });
+  bouton(206, 702, 134, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
   boutonSon(W - 54, 14);
   paragraphe(ctx, "Dessine tes tours. Trace des murs. Rature les monstres.", W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
 }

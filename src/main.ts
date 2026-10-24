@@ -20,7 +20,9 @@ import { RELIURE, calculer, pageDroiteMenu, type Rect, type Vue } from "./ui/vue
 import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
 import { dessinerReglages } from "./ui/reglages";
-import { avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
+import { dessinerCoop, ouvrirCoop } from "./ui/coop";
+import { coop } from "./coop/session";
+import { basculerPause, avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
 import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, toucherTrousse } from "./ui/trousse";
 
 const canvas = document.getElementById("jeu") as HTMLCanvasElement;
@@ -117,7 +119,7 @@ canvas.addEventListener("pointerup", lever);
 canvas.addEventListener("pointercancel", lever);
 
 window.addEventListener("keydown", (e) => {
-  if ((e.key === "Escape" || e.key === " ") && partie && nav.ecran === "partie") partie.pause = !partie.pause;
+  if ((e.key === "Escape" || e.key === " ") && partie && nav.ecran === "partie") basculerPause();
 });
 window.addEventListener("blur", mettreEnPause);
 document.addEventListener("visibilitychange", () => document.hidden && mettreEnPause());
@@ -228,6 +230,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "talents") dessinerTalents();
     else if (nav.ecran === "trousse") dessinerTrousse();
     else if (nav.ecran === "reglages") dessinerReglages();
+    else if (nav.ecran === "coop") dessinerCoop();
     if (vue.mise === "ouvert") {
       ctx.setTransform(pageDroiteMenu(vue));
       if (fond) ctx.drawImage(fond, 0, 0, W, H);
@@ -247,6 +250,9 @@ function image(maintenant: number): void {
 
 redimensionner();
 chargerApparences();
+// Un lien de salon (…/?salon=ABCD) : on rejoint directement son ami
+const salon = new URLSearchParams(location.search).get("salon");
+if (salon) ouvrirCoop(salon);
 void document.fonts.load("700 20px Caveat").then(() => document.fonts.load('20px "Patrick Hand"')).finally(() => requestAnimationFrame(image));
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.serviceWorker.register("./sw.js");
@@ -256,6 +262,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
   get partie() { return partie; },
   get ecran() { return nav.ecran; },
   get vue() { return vue; },
+  get coop() { return coop; },
   sauvegarde: () => sauvegarde,
   effacer,
   jouerPage,

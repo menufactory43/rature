@@ -15,7 +15,7 @@ import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  choisirFourniture, fournitureDue, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  PAS_SIM, choisirFourniture, fournitureDue, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
@@ -25,9 +25,36 @@ import { reglages } from "../reglages";
 import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./base";
 import { nav } from "./nav";
 import { BANDE, PANNEAU_W, type Vue } from "./vue";
+import type { Lockstep, Action } from "../coop/lockstep";
+import { aplatir, empreinte, jouerTour, type Commun } from "../coop/partage";
 import { ouvrirReglages } from "./reglages";
 
-export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro";
+export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop";
+
+/** La coop : le lockstep, ce que les deux partagent, et de quoi parler à l'autre (branché par coop/session.ts). */
+export interface CoopPartie {
+  ls: Lockstep;
+  commun: Commun;
+  hote: boolean;
+  code: string;
+  envoyer: (m: object) => void;
+  pair: () => boolean;
+  quitter: () => void;
+  /** L'hôte relance la page pour les deux. */
+  rejouer: (() => void) | null;
+  /** Le trait que l'autre est en train de dessiner. */
+  crayon: V[] | null;
+  /** Combien de points de mon trait sont déjà partis chez l'autre, et quand. */
+  envoye: number;
+  dernierEnvoi: number;
+  /** Depuis quand l'autre n'est plus branché (0 s'il l'est). */
+  absentDepuis: number;
+  /** L'autre a quitté la partie : on continue seul. */
+  parti: boolean;
+}
+
+/** Le stylo de l'autre, en coop : une encre brune, qu'on ne confond avec aucune tour. */
+export const STYLO_BINOME = "#a0522d";
 
 interface Partie {
   jeu: Jeu;
@@ -57,17 +84,20 @@ interface Partie {
   nouveaux: { type: TypeEnnemi; depuis: number }[];
   /** Depuis quand les fournitures sont proposées (pour les faire glisser). */
   choixDepuis: number;
+  coop: CoopPartie | null;
+  /** Mes traits partis en coop, qui attendent leur tour pour être joués. */
+  enAttente: Pt[][];
 }
 
 export let partie: Partie | null = null;
 
-export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode: Mode; libelle: string; cleJour?: string }): void {
+export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode: Mode; libelle: string; cleJour?: string; coop?: CoopPartie }): void {
   const jeu = nouveauJeu(options());
   partie = {
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [], choixDepuis: 0,
+    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [],
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -81,24 +111,79 @@ function recommencer(): void {
 }
 
 export function mettreEnPause(): void {
-  if (partie && !partie.fin && nav.ecran === "partie") partie.pause = true;
+  if (partie && !partie.fin && nav.ecran === "partie") mettrePause(partie, true);
+}
+
+export function basculerPause(): void {
+  if (partie && !partie.fin && nav.ecran === "partie") mettrePause(partie, !partie.pause);
+}
+
+/** En coop, tout ce qui touche à la partie passe par le lockstep ; seul, ça se fait tout de suite. */
+function faire(p: Partie, a: Action, seul: () => void): void {
+  if (p.coop) p.coop.ls.agir(a);
+  else seul();
+}
+
+function mettrePause(p: Partie, on: boolean): void {
+  faire(p, { k: "pause", on }, () => (p.pause = on));
+}
+
+function changerVitesse(p: Partie): void {
+  const v = p.vitesse === 3 ? 1 : p.vitesse + 1;
+  faire(p, { k: "vitesse", v }, () => (p.vitesse = v));
+}
+
+function appelerVague(p: Partie): void {
+  faire(p, { k: "vague" }, () => lancerVague(p.jeu));
+}
+
+/** L'autre est parti : la partie continue, seul. */
+export function continuerSeul(p: Partie): void {
+  if (!p.coop) return;
+  p.vitesse = p.coop.commun.vitesse;
+  p.pause = false;
+  p.coop = null;
+  p.enAttente = [];
 }
 
 // --- La boucle ---
 
-const PAS = 1 / 60;
+const PAS = PAS_SIM;
 
 export function avancerPartie(dt: number): void {
   const p = partie;
-  if (!p || p.pause || p.fiches.length) return;
+  if (!p) return;
   const j = p.jeu;
-  p.reste += dt * (j.phase === "jeu" ? p.vitesse : 1);
-  let n = 0;
-  while (p.reste >= PAS && n++ < 20) {
-    step(j, PAS);
-    p.reste -= PAS;
+  if (p.coop) {
+    // En coop, le temps ne s'arrête jamais tout à fait : les tours vides continuent de passer, pour qu'on puisse reprendre
+    const c = p.coop;
+    c.absentDepuis = c.pair() ? 0 : c.absentDepuis + dt;
+    c.ls.avancer(dt, (actions) => {
+      const faits = jouerTour(j, c.commun, actions.map((x) => x.a));
+      faits.forEach((f, i) => {
+        if (!f.trace) return;
+        const moi = actions[i].hote === c.hote;
+        if (moi) p.enAttente.shift();
+        const r = f.resultat;
+        const pose = r?.ok && r.geste === "tour" ? j.tours[j.tours.length - 1] : null;
+        if (r && (r.geste === "tour" || r.geste === "rien" || !r.ok)) fx.ajouterTrace(f.trace, pose ? { x: pose.x, y: pose.y } : null, r.ok ? (moi ? BLEU : STYLO_BINOME) : CRAYON);
+        if (moi && r && !r.ok && r.geste !== "rien") vibrer("refus");
+        if (!moi) c.crayon = null;
+      });
+      p.vitesse = c.commun.vitesse;
+      p.pause = c.commun.pause;
+      return empreinte(j);
+    });
+  } else {
+    if (p.pause || p.fiches.length) return;
+    p.reste += dt * (j.phase === "jeu" ? p.vitesse : 1);
+    let n = 0;
+    while (p.reste >= PAS && n++ < 20) {
+      step(j, PAS);
+      p.reste -= PAS;
+    }
+    if (p.reste > PAS) p.reste = 0;
   }
-  if (p.reste > PAS) p.reste = 0;
   audio.jouer(j.sons);
   j.sons.length = 0;
   fx.absorber(j, dt);
@@ -172,6 +257,7 @@ export function toucherPartie(x: number, y: number, e: PointerEvent): boolean {
   if (x < 0 || x > W || y < HAUT || y > HAUT + PAGE_H || p.doigt !== null) return false;
   p.doigt = e.pointerId;
   p.trace = [{ x, y: y - HAUT, t: e.timeStamp }];
+  if (p.coop) p.coop.envoye = 0;
   p.sec = false;
   return true;
 }
@@ -203,6 +289,13 @@ export function glisserPartie(e: PointerEvent, versPage: (ev: PointerEvent) => {
     }
   }
   const n = p.trace.length;
+  // En coop, l'autre voit mon stylo avancer (quelques fois par seconde, seulement les nouveaux points)
+  const c = p.coop;
+  if (c && !p.arme && ui.temps - c.dernierEnvoi > 0.07 && n > c.envoye) {
+    c.envoyer({ t: "crayon", debut: c.envoye === 0, d: p.trace.slice(c.envoye).flatMap((q) => [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]) });
+    c.envoye = n;
+    c.dernierEnvoi = ui.temps;
+  }
   if (n > 2) {
     const a = p.trace[Math.max(0, n - 4)];
     const b = p.trace[n - 1];
@@ -223,6 +316,7 @@ export function leverPartie(e: PointerEvent): void {
   const duree = trace[trace.length - 1].t - trace[0].t;
   // Un simple toucher : choisir une tour (ou fermer son menu)
   if (l < 10 && duree < 400) {
+    if (p.coop && p.coop.envoye) p.coop.envoyer({ t: "crayon", fin: true });
     // Toucher la page désarme le pouvoir
     if (p.arme) {
       p.arme = null;
@@ -239,6 +333,15 @@ export function leverPartie(e: PointerEvent): void {
       }
     }
     p.selection = best && best !== p.selection ? best : null;
+    return;
+  }
+  if (p.coop) {
+    // Le trait part dans le lockstep : il sera joué dans deux dixièmes de seconde, chez moi comme chez l'autre
+    p.coop.envoyer({ t: "crayon", fin: true });
+    p.coop.ls.agir({ k: "trace", p: aplatir(trace), ...(p.arme ? { arme: p.arme } : {}) });
+    p.enAttente.push(trace);
+    p.arme = null;
+    p.selection = null;
     return;
   }
   if (p.arme) {
@@ -306,6 +409,7 @@ export function dessinerPartie(v: Vue): void {
     brouillon = { pts: p.trace, geste: c.geste, couleur: c.geste === "tour" ? STYLOS[tourDe(c.glyphe!)] : undefined };
   }
   scene(ctx, j, brouillon, p.selection);
+  if (p.coop) traitsCoop(p);
   if (p.trace && p.trace.length > 3 && !p.arme) apercu(p);
   if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
     const b = p.trace[p.trace.length - 1];
@@ -357,6 +461,7 @@ export function dessinerPartie(v: Vue): void {
   fx.dessinerEcran(ctx, HAUT, W, portrait ? H : HAUT + PAGE_H);
   ctx.restore();
   postitNouveau(p);
+  if (p.coop) attenteBinome(p, p.coop);
   if (j.choix) choixFournitures(p, j.choix);
   else p.choixDepuis = 0;
   if (p.selection) menuTour(p, p.selection);
@@ -374,6 +479,36 @@ export function dessinerPartie(v: Vue): void {
   if (p.pause) dessinerPause();
   if (p.fin) dessinerFin(p);
   ctx.restore();
+}
+
+/** Mes traits partis qui attendent leur tour (encre fraîche, un peu pâle), et le stylo de l'autre en train d'écrire. */
+function traitsCoop(p: Partie): void {
+  const ctx = ui.ctx;
+  p.enAttente.forEach((t, i) => trait(ctx, t, { couleur: BLEU, epaisseur: 2.2, graine: 300 + i, amp: 0, alpha: 0.55 }));
+  const c = p.coop!;
+  if (c.crayon && c.crayon.length > 1) {
+    trait(ctx, c.crayon, { couleur: STYLO_BINOME, epaisseur: 2.4, graine: 310, amp: 0 });
+    // La pointe du stylo de l'autre
+    const b = c.crayon[c.crayon.length - 1];
+    cercle(ctx, b.x, b.y, 5, { couleur: STYLO_BINOME, epaisseur: 1.4, graine: 311, fond: "rgba(160,82,45,0.25)" });
+  }
+}
+
+/** Le réseau traîne ou l'autre est parti : une fiche au milieu de la page. */
+function attenteBinome(p: Partie, c: CoopPartie): void {
+  if (c.parti) {
+    if (!p.fin) fx.banniere("Seul !", "ton binôme est parti, la page continue", true, 2.4);
+    continuerSeul(p);
+    return;
+  }
+  if (c.ls.attente < 0.5 && c.absentDepuis < 1) return;
+  const ctx = ui.ctx;
+  const x = 50;
+  const y = HAUT + PAGE_H / 2 - 70;
+  bristol(ctx, x, y, W - 100, c.absentDepuis > 6 ? 150 : 100);
+  ecrire(ctx, c.pair() ? "On attend ton binôme…" : "Ton binôme a perdu la connexion", W / 2, y + 34, { police: "titre", taille: 24 });
+  ecrire(ctx, c.pair() ? "le réseau traîne un peu" : "on l'attend une minute", W / 2, y + 64, { taille: 14, couleur: CRAYON });
+  if (c.absentDepuis > 6) bouton(110, y + 88, 180, 46, "Continuer seul", () => continuerSeul(p), { taille: 19 });
 }
 
 let papierBande: { c: HTMLCanvasElement; cle: string } | null = null;
@@ -656,7 +791,7 @@ function carteAttente(p: Partie, sansBouton = false): void {
     return;
   }
   ecrire(ctx, "Pose tes tours, puis :", x + w - 64, y + 52, { taille: 12, couleur: CRAYON });
-  bouton(x + w - 116, y + 64, 104, 40, "Go !", () => lancerVague(j), { principal: true });
+  bouton(x + w - 116, y + 64, 104, 40, "Go !", () => appelerVague(p), { principal: true });
 }
 
 /** Une fiche bristol scotchée : blanche, lignée de bleu, ligne rouge en haut, deux bouts de scotch aux coins. */
@@ -695,16 +830,16 @@ function bristol(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
 function bandeauHaut(p: Partie): void {
   const ctx = ui.ctx;
   const j = p.jeu;
-  bouton(8, 8, 38, 30, "II", () => (p.pause = true), { taille: 17 });
+  bouton(8, 8, 38, 30, "II", () => mettrePause(p, true), { taille: 17 });
   ecrire(ctx, "♥", 62, 22, { couleur: ROUGE, taille: 22 });
   ecrire(ctx, String(j.vies), 76, 23, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
   const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
   ecrire(ctx, `vague ${Math.max(1, j.vague)}${total}`, 118, 23, { align: "left", taille: 19 });
-  bouton(W - 50, 8, 42, 30, `×${p.vitesse}`, () => (p.vitesse = p.vitesse === 3 ? 1 : p.vitesse + 1), { taille: 17, principal: p.vitesse > 1 });
+  bouton(W - 50, 8, 42, 30, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
   ecrire(ctx, p.libelle, W - 60, 22, { align: "right", taille: 13, couleur: CRAYON });
   if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     const bonus = Math.round(j.prochaine * 2);
-    bouton(W - 230, 40, 222, 18, `▸ vague ${j.vague + 1} dans ${Math.ceil(j.prochaine)} s (+${bonus})`, () => lancerVague(j), { taille: 13 });
+    bouton(W - 230, 40, 222, 18, `▸ vague ${j.vague + 1} dans ${Math.ceil(j.prochaine)} s (+${bonus})`, () => appelerVague(p), { taille: 13 });
   } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", W - 12, 49, { align: "right", taille: 14, couleur: ROUGE });
   else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", W - 12, 49, { align: "right", taille: 13, couleur: fournitureDue(j) ? ROUGE : CRAYON });
 }
@@ -787,16 +922,16 @@ function bande(p: Partie): { x: number; y: number } {
   // Le trait qui sépare la bande de la carte, du côté de la carte
   const bord = reglages.gaucher ? w - 1 : 1;
   trait(ctx, [{ x: bord, y: 4 }, { x: bord, y: PAGE_H - 4 }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 82 });
-  bouton(8, 8, 40, 34, "II", () => (p.pause = true), { taille: 17 });
-  bouton(54, 8, 40, 34, `×${p.vitesse}`, () => (p.vitesse = p.vitesse === 3 ? 1 : p.vitesse + 1), { taille: 17, principal: p.vitesse > 1 });
+  bouton(8, 8, 40, 34, "II", () => mettrePause(p, true), { taille: 17 });
+  bouton(54, 8, 40, 34, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
   ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
   ecrire(ctx, String(j.vies), 40, 69, { align: "left", couleur: ROUGE, taille: 28, police: "titre" });
   const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
   ecrire(ctx, "vague", w / 2, 96, { taille: 13, couleur: CRAYON });
   ecrire(ctx, `${Math.max(1, j.vague)}${total}`, w / 2, 116, { police: "titre", taille: 24 });
-  if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => lancerVague(j), { principal: true, sous: "vague 1" , taille: 20 });
+  if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => appelerVague(p), { principal: true, sous: "vague 1" , taille: 20 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
-    bouton(8, 136, w - 16, 52, `▸ ${j.vague + 1}`, () => lancerVague(j), { sous: `${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)}`, taille: 20 });
+    bouton(8, 136, w - 16, 52, `▸ ${j.vague + 1}`, () => appelerVague(p), { sous: `${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)}`, taille: 20 });
   } else if (j.phase === "jeu" && !j.plan) paragraphe(ctx, "dernière vague !", w / 2, 150, w - 12, { taille: 15, couleur: ROUGE });
   else if (j.phase === "jeu") paragraphe(ctx, fournitureDue(j) ? "puis une fourniture" : "la vague arrive…", w / 2, 150, w - 12, { taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
   compteurEncre(p, 20, 222, 30, 34, 248);
@@ -825,10 +960,14 @@ function panneau(p: Partie): { x: number; y: number } {
   const x0 = 46;
   const droite = w - 14;
   // L'en-tête : la page en titre, et les commandes
-  ecrire(ctx, p.libelle, x0, 30, { align: "left", police: "titre", taille: 28 });
-  bouton(droite - 40, 12, 40, 34, "II", () => (p.pause = true), { taille: 17 });
+  // Le titre rapetisse s'il le faut pour laisser la place aux boutons
+  ctx.font = "700 28px Caveat, cursive";
+  const place = droite - 144 - x0;
+  const tt = Math.max(16, Math.min(28, (28 * place) / Math.max(1, ctx.measureText(p.libelle).width)));
+  ecrire(ctx, p.libelle, x0, 30, { align: "left", police: "titre", taille: tt });
+  bouton(droite - 40, 12, 40, 34, "II", () => mettrePause(p, true), { taille: 17 });
   boutonSon(droite - 86, 13);
-  bouton(droite - 134, 12, 42, 34, `×${p.vitesse}`, () => (p.vitesse = p.vitesse === 3 ? 1 : p.vitesse + 1), { taille: 17, principal: p.vitesse > 1 });
+  bouton(droite - 134, 12, 42, 34, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
   // Les vies, la vague, l'encre
   ecrire(ctx, "♥", x0 + 8, 86, { couleur: ROUGE, taille: 30 });
   ecrire(ctx, String(j.vies), x0 + 28, 87, { align: "left", couleur: ROUGE, taille: 36, police: "titre" });
@@ -856,9 +995,9 @@ function panneau(p: Partie): { x: number; y: number } {
     }
   }
   y = Math.max(y, 262);
-  if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => lancerVague(j), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
+  if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => appelerVague(p), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
-    bouton(x0, y, droite - x0, 46, `▸ Appeler la vague ${j.vague + 1}`, () => lancerVague(j), { sous: `elle arrive dans ${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)} d'encre si tu l'appelles`, taille: 20 });
+    bouton(x0, y, droite - x0, 46, `▸ Appeler la vague ${j.vague + 1}`, () => appelerVague(p), { sous: `elle arrive dans ${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)} d'encre si tu l'appelles`, taille: 20 });
   } else if (j.phase === "jeu" && j.plan) ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", x0, y + 20, { align: "left", taille: 16, couleur: fournitureDue(j) ? ROUGE : CRAYON });
   // Les pouvoirs : un gros bouton chacun, son nom à côté
   const pouvoirs = j.options.pouvoirs ?? [];
@@ -994,20 +1133,23 @@ function menuTour(p: Partie, t: Tour): void {
   let by = y + 84;
   if (t.niveau < 3) {
     const cout = coutAmelioration(j, t)!;
-    bouton(x + 12, by, 170, 50, `Améliorer`, () => ameliorer(j, t), { sous: `−${cout} d'encre`, inactif: j.encre < cout, principal: true, taille: 19 });
+    bouton(x + 12, by, 170, 50, `Améliorer`, () => faire(p, { k: "ameliorer", id: t.id }, () => ameliorer(j, t)), { sous: `−${cout} d'encre`, inactif: j.encre < cout, principal: true, taille: 19 });
   } else if (!t.spec) {
     f.specs.forEach((sp, i) => {
       const cout = coutAmelioration(j, t, i + 1)!;
       const bx = x + 12 + i * ((w - 36) / 2 + 12);
       const bw = (w - 36) / 2;
-      bouton(bx, by, bw, 50, sp.nom, () => ameliorer(j, t, i + 1), { sous: `−${cout}`, inactif: j.encre < cout, principal: true, taille: 18 });
+      bouton(bx, by, bw, 50, sp.nom, () => faire(p, { k: "ameliorer", id: t.id, spec: i + 1 }, () => ameliorer(j, t, i + 1)), { sous: `−${cout}`, inactif: j.encre < cout, principal: true, taille: 18 });
       paragraphe(ctx, sp.texte, bx + 4, by + 56, bw - 8, { align: "left", taille: 12, couleur: CRAYON });
     });
     by += 96;
   } else ecrire(ctx, "au maximum", x + 96, by + 25, { taille: 16, couleur: CRAYON });
   const bx2 = t.niveau === 3 && !t.spec ? x + 12 : x + 194;
-  if (!f.passive) bouton(bx2, t.niveau === 3 && !t.spec ? by + 8 : by, 88, 50, "Cible", () => changerCible(t), { sous: t.cible, taille: 16 });
-  bouton(x + w - 98, t.niveau === 3 && !t.spec ? by + 8 : by, 86, 50, "Vendre", () => vendre(j, t), { sous: `+${valeurRevente(t)}`, taille: 16 });
+  if (!f.passive) bouton(bx2, t.niveau === 3 && !t.spec ? by + 8 : by, 88, 50, "Cible", () => faire(p, { k: "cible", id: t.id }, () => changerCible(t)), { sous: t.cible, taille: 16 });
+  bouton(x + w - 98, t.niveau === 3 && !t.spec ? by + 8 : by, 86, 50, "Vendre", () => faire(p, { k: "vendre", id: t.id }, () => {
+    vendre(j, t);
+    p.selection = null;
+  }), { sous: `+${valeurRevente(t)}`, taille: 16 });
   ctx.restore();
 }
 
@@ -1056,7 +1198,17 @@ function fiche(type: TypeTour, j: Jeu): void {
 function dessinerPause(): void {
   voile(0.88);
   ecrire(ui.ctx, "Pause", W / 2, 230, { police: "titre", taille: 64 });
-  bouton(90, 300, 220, 56, "Reprendre", () => partie && (partie.pause = false), { principal: true });
+  bouton(90, 300, 220, 56, "Reprendre", () => partie && mettrePause(partie, false), { principal: true });
+  const c = partie?.coop;
+  if (c) {
+    // À deux : la pause vaut pour les deux, et seul l'hôte relance la page
+    ecrire(ui.ctx, `à deux · salon ${c.code}`, W / 2, 270, { taille: 15, couleur: CRAYON });
+    if (c.rejouer) bouton(90, 376, 220, 50, "Recommencer à deux", c.rejouer, { taille: 19 });
+    bouton(90, 446, 220, 50, "Quitter la coop", c.quitter, { taille: 19 });
+    bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
+    boutonSon(262, 522);
+    return;
+  }
   bouton(90, 376, 220, 50, "Recommencer la page", recommencer, { taille: 19 });
   bouton(90, 446, 220, 50, "Quitter la page", () => nav.aller(partie?.mode === "jour" || partie?.mode === "interro" ? "titre" : "campagne"), { taille: 19 });
   bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
@@ -1212,6 +1364,12 @@ function dessinerFin(p: Partie): void {
   if (suivante) {
     bouton(70, y, 260, 56, "Page suivante", () => nav.ouvrirPage?.(suivante), { principal: true, taille: 22 });
     y += 70;
+  }
+  if (p.mode === "coop") {
+    if (p.coop?.rejouer) bouton(70, y, 260, 50, "Rejouer à deux", p.coop.rejouer, { principal: true, taille: 20 });
+    else ecrire(ui.ctx, p.coop ? "l'hôte peut relancer la page" : "", W / 2, y + 25, { taille: 16, couleur: CRAYON });
+    bouton(70, y + 64, 260, 50, p.coop ? "Quitter la coop" : "Menu", () => (p.coop ? p.coop.quitter() : nav.aller("titre")), { taille: 20 });
+    return;
   }
   const versMenu = p.mode === "jour" || p.mode === "interro";
   bouton(70, y, 260, 50, p.mode === "interro" ? "Nouvelle interro" : "Rejouer cette page", recommencer, { principal: !suivante, taille: 20 });

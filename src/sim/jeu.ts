@@ -53,6 +53,8 @@ export interface Options {
   pouvoirs?: Pouvoir[];
   /** L'interro surprise : une fourniture à choisir toutes les deux vagues. */
   interro?: boolean;
+  /** À deux : un peu plus d'encre, et des monstres plus solides. */
+  coop?: boolean;
 }
 
 // --- L'état ---
@@ -269,6 +271,12 @@ export function nouveauJeu(options: Options): Jeu {
     boosts: Object.fromEntries(TYPES_TOURS_LISTE.map((t) => [t, boostNeutre()])) as Record<TypeTour, Boost>,
     mods: { recharge: 1, pvMonstres: 1 }, choix: null, choixFait: 0, prises: [],
   };
+  if (options.coop) {
+    // Deux stylos pour une seule encre : on en donne un peu plus, et les monstres encaissent davantage
+    j.encre *= 1.4;
+    j.talents.regen *= 1.25;
+    j.mods.pvMonstres = 1.3;
+  }
   recalculer(j);
   return j;
 }
@@ -727,6 +735,9 @@ function choisirCible(j: Jeu, t: Tour, portee: number, exclus?: Set<number>): En
 }
 
 // --- Une image de simulation ---
+
+/** Le pas de la simulation : 60 par seconde de jeu, partout (solo, coop, bot). */
+export const PAS_SIM = 1 / 60;
 
 export function step(j: Jeu, dt: number): void {
   j.temps += dt;
