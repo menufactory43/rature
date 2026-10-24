@@ -4,6 +4,7 @@ import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
 import type { V } from "../sim/geom";
 import type { Jeu } from "../sim/jeu";
 import { BLEU, CRAYON, ROUGE, ecrire, pointsCercle, trait } from "./encre";
+import { vibrer } from "../vibre";
 import { monstre } from "./monstres";
 
 type Genre = "goutte" | "tache" | "fumee" | "tiret" | "anneau" | "papier" | "etincelle" | "plus" | "encre";
@@ -126,6 +127,7 @@ export function absorber(j: Jeu, dt: number): void {
         const n = Math.min(4, 1 + Math.floor(e.prime / 6));
         for (let k = 0; k < n; k++) ajouter("encre", e.x, e.y, { x0: e.x + hasard(-10, 10), y0: e.y + hasard(-10, 10), vie: hasard(0.55, 0.8), r: 2.6, couleur: BLEU, age: -k * 0.05 });
         if (f.boss) {
+          vibrer("fort");
           secouer(12);
           fx.flash = 0.6;
           fx.flashCouleur = BLEU;
@@ -135,6 +137,7 @@ export function absorber(j: Jeu, dt: number): void {
         break;
       }
       case "fuite": {
+        vibrer("moyen");
         secouer(5 + Math.min(10, e.vies * 1.5));
         fx.flash = Math.min(1, 0.35 + e.vies * 0.08);
         fx.flashCouleur = ROUGE;
@@ -169,6 +172,7 @@ export function absorber(j: Jeu, dt: number): void {
         break;
       }
       case "pose":
+        vibrer("leger");
         fx.naissances.set(e.id, fx.temps);
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * Math.PI * 2;
@@ -177,17 +181,20 @@ export function absorber(j: Jeu, dt: number): void {
         gicler(e.x, e.y, 6, BLEU, 70, 1.8);
         break;
       case "amelio":
+        vibrer("leger");
         fx.ameliorations.set(e.id, fx.temps);
         ajouter("anneau", e.x, e.y, { vie: 0.45, r: e.spec ? 34 : 24, couleur: e.spec ? ROUGE : BLEU });
         for (let k = 0; k < (e.spec ? 8 : 5); k++) ajouter("plus", e.x + hasard(-14, 14), e.y + hasard(-6, 6), { vx: hasard(-10, 10), vy: hasard(-60, -30), vie: hasard(0.6, 0.9), r: hasard(3, 5), couleur: e.spec ? ROUGE : BLEU });
         break;
       case "detruite":
+        vibrer("moyen");
         secouer(4);
         for (let k = 0; k < 12; k++) ajouter("papier", e.x, e.y, { vx: hasard(-120, 120), vy: hasard(-120, 120), vie: hasard(0.6, 1), r: hasard(2.5, 4.5), vr: hasard(-12, 12), couleur: "#fffaf0" });
         gicler(e.x, e.y, 10, BLEU, 120, 2.2);
         break;
       case "vague":
         if (e.boss) {
+          vibrer("fort");
           banniere("BOSS", ENNEMIS[e.boss].nom, true, 2.4);
           secouer(8);
           fx.flash = 0.4;
@@ -202,6 +209,7 @@ export function absorber(j: Jeu, dt: number): void {
         break;
       case "rature":
         if (e.touches) {
+          vibrer("leger");
           secouer(2 + Math.min(4, e.touches));
           for (const q of e.pts.filter((_, i) => i % 3 === 0)) gicler(q.x, q.y, 1, BLEU, 80, 1.8);
         }

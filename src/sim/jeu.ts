@@ -438,10 +438,9 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
 
 // --- Le champ de flux ---
 
-function recalculer(j: Jeu): void {
-  const s = j.champ.surcout;
+function remplirSurcout(s: Float32Array, murs: { segs: SegMur[] }[], tours: V[]): void {
   s.fill(0);
-  for (const m of j.murs) {
+  for (const m of murs) {
     for (const seg of m.segs) {
       if (seg.pv <= 0) continue;
       const c0 = Math.floor((Math.min(seg.a.x, seg.b.x) - 10) / CASE);
@@ -453,16 +452,36 @@ function recalculer(j: Jeu): void {
           if (pointSegDist({ x: (c + 0.5) * CASE, y: (l + 0.5) * CASE }, seg.a, seg.b) < 8) s[indice(c, l)] = Math.max(s[indice(c, l)], seg.pv * 0.3);
     }
   }
-  for (const t of j.tours) {
+  for (const t of tours) {
     const r = RAYON_TOUR + 4;
     for (let l = Math.floor((t.y - r) / CASE); l <= Math.floor((t.y + r) / CASE); l++)
       for (let c = Math.floor((t.x - r) / CASE); c <= Math.floor((t.x + r) / CASE); c++)
         if (c >= 0 && l >= 0 && c < COLS && l < LIGNES && Math.hypot((c + 0.5) * CASE - t.x, (l + 0.5) * CASE - t.y) < r) s[indice(c, l)] = COUT_TOUR;
   }
+}
+
+function recalculer(j: Jeu): void {
+  remplirSurcout(j.champ.surcout, j.murs, j.tours);
   j.champ.calculer();
   j.trajets = j.carte.entrees.map((e) => j.champ.trajet(e.bord));
   j.champSale = false;
   j.dernierCalcul = j.temps;
+}
+
+/** Les trajets qu'auraient les monstres si l'on posait ce mur ou cette tour (aperçu pendant qu'on dessine). */
+export function apercuTrajets(j: Jeu, ajout: { mur?: V[]; tour?: V }): V[][] {
+  const champ = new Champ(j.carte);
+  const murs: { segs: SegMur[] }[] = [...j.murs];
+  if (ajout.mur && ajout.mur.length > 1) {
+    const pts = resample(ajout.mur, 12);
+    const pv = pvSegment(j);
+    const segs: SegMur[] = [];
+    for (let i = 1; i < pts.length; i++) segs.push({ a: pts[i - 1], b: pts[i], pv, pvMax: pv });
+    murs.push({ segs });
+  }
+  remplirSurcout(champ.surcout, murs, ajout.tour ? [...j.tours, ajout.tour] : j.tours);
+  champ.calculer();
+  return j.carte.entrees.map((e) => champ.trajet(e.bord));
 }
 
 // --- Les dégâts ---

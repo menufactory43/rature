@@ -1,20 +1,21 @@
 // L'écran de jeu : la page, les bandeaux, le pense-bête des symboles, le menu des tours, la pause et la fin.
 import * as audio from "../audio";
 import * as fx from "../render/fx";
+import { vibrer } from "../vibre";
 import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, rectangle, trait } from "../render/encre";
 import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
 import { symbole } from "../render/tours";
 import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
-import { polylineLength, truncate } from "../sim/geom";
+import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
-  ameliorer, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  gestesPermis, lancerVague, longueurPossible, nouveauJeu, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
+  gestesPermis, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
-import { PORTEE_INFINIE, TOURS, type TypeTour } from "../sim/tours";
+import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
 import { resume, type PlanVague } from "../sim/vagues";
 import { enregistrer, noterPage, sauvegarde } from "../progression";
 import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./base";
@@ -216,6 +217,7 @@ export function leverPartie(e: PointerEvent): void {
   }
   const r = appliquerTrace(j, trace);
   if (r.ok) p.selection = null;
+  if (!r.ok && r.geste !== "rien") vibrer("refus");
   if (r.geste === "tour" || r.geste === "rien" || !r.ok) {
     const pose = r.ok ? j.tours[j.tours.length - 1] : null;
     fx.ajouterTrace(trace, pose ? { x: pose.x, y: pose.y } : null, r.ok ? BLEU : CRAYON);
@@ -254,6 +256,7 @@ export function dessinerPartie(echelle: number): void {
   let brouillon: Brouillon | null = null;
   if (p.trace) brouillon = { pts: p.trace, geste: classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]).geste };
   scene(ctx, j, brouillon, p.selection);
+  if (p.trace && p.trace.length > 3) apercu(p);
   if (brouillon && p.trace && p.trace.length > 3) {
     const b = p.trace[p.trace.length - 1];
     const c = classer([...p.trace, { ...b, t: performance.now() }]);
@@ -298,6 +301,63 @@ function astuce(p: Partie): string | null {
   if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
   if (id === "1-4" && present("tache")) return "Les taches rongent les murs, et se divisent en mourant.";
   return null;
+}
+
+/** L'aperçu pendant qu'on dessine : la portée de la tour qui va naître, et le nouveau chemin de la horde. */
+let apercuCache: { n: number; quand: number; trajets: V[][] } | null = null;
+
+function apercu(p: Partie): void {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const trace = p.trace!;
+  const b = trace[trace.length - 1];
+  const c = classer([...trace, { ...b, t: performance.now() }]);
+  let ajout: { mur?: V[]; tour?: V } | null = null;
+  if (c.geste === "tour") {
+    const type = tourDe(c.glyphe!);
+    const cx = trace.reduce((s, q) => s + q.x, 0) / trace.length;
+    const cy = trace.reduce((s, q) => s + q.y, 0) / trace.length;
+    const refus = refusPose(j, cx, cy) || (!j.options.toursDispo.includes(type) ? "pas débloquée" : null);
+    const portee = statsTour(type, 1, 0).portee;
+    if (portee && portee < PORTEE_INFINIE) {
+      ctx.save();
+      ctx.fillStyle = refus ? "rgba(196,48,43,0.07)" : "rgba(34,64,143,0.07)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, portee, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.setLineDash([4, 5]);
+      ctx.strokeStyle = refus ? "rgba(196,48,43,0.6)" : "rgba(34,64,143,0.55)";
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (refus) ecrire(ctx, refus, cx, cy + 26, { taille: 13, couleur: ROUGE });
+    else ajout = { tour: { x: cx, y: cy } };
+  } else if (c.geste === "mur" && gestesPermis(j).mur) ajout = { mur: trace };
+  if (!ajout) {
+    apercuCache = null;
+    return;
+  }
+  // Recalculer le chemin coûte un peu : pas plus de dix fois par seconde
+  const maintenant = performance.now();
+  if (!apercuCache || (apercuCache.n !== trace.length && maintenant - apercuCache.quand > 100)) apercuCache = { n: trace.length, quand: maintenant, trajets: apercuTrajets(j, ajout) };
+  ctx.save();
+  ctx.setLineDash([3, 5]);
+  ctx.lineDashOffset = -ui.temps * 20;
+  ctx.strokeStyle = "rgba(196,48,43,0.6)";
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = "round";
+  for (const t of apercuCache.trajets) {
+    ctx.beginPath();
+    t.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    ctx.stroke();
+  }
+  ctx.restore();
+  // L'allongement du chemin, en clair
+  const avant = j.trajets.reduce((s, t) => s + polylineLength(t), 0);
+  const apres = apercuCache.trajets.reduce((s, t) => s + polylineLength(t), 0);
+  const d = Math.round((apres - avant) / 10);
+  if (Math.abs(d) >= 2) ecrire(ctx, `chemin ${d > 0 ? "+" : ""}${d}`, b.x + 18, b.y - 42, { taille: 13, couleur: d > 0 ? BLEU : ROUGE });
 }
 
 const tourDe = (g: string): TypeTour => (Object.keys(TOURS) as TypeTour[]).find((t) => TOURS[t].glyphe === g)!;
