@@ -37,7 +37,13 @@ export interface Vue {
   s: number;
   /** L'échelle des menus. */
   m: number;
+  /** En portrait, la feuille couvre tout l'écran (pas de bureau autour) : la taille de l'écran, en pixels CSS. */
+  plein: { w: number; h: number } | null;
 }
+
+/** En portrait, les bandeaux de la partie sont plus serrés que le cadre des menus : la carte y gagne en largeur. */
+export const HAUT_PORTRAIT = 44;
+export const BAS_PORTRAIT = 78;
 
 /** Le bord de bureau qu'on laisse voir autour du cahier, même sur un téléphone. */
 export const MARGE = 6;
@@ -54,12 +60,22 @@ export function miseDe(cw: number, ch: number): Mise {
 function calculerDans(cw: number, ch: number, dpr: number): Vue {
   const mise = miseDe(cw, ch);
   // Le cadre des menus, centré dans tout l'écran
-  const m0 = Math.min((cw - MARGE * 2) / W, (ch - MARGE * 2) / H);
+  // En portrait la feuille va jusqu'aux bords : pas de marge de bureau à garder
+  const marge = mise === "portrait" ? 0 : MARGE;
+  const m0 = Math.min((cw - marge * 2) / W, (ch - marge * 2) / H);
   const ox0 = (cw - W * m0) / 2;
   const oy0 = (ch - H * m0) / 2;
   const centre = mat(dpr, ox0, oy0, m0);
   const seul = [{ x: ox0, y: oy0, w: W * m0, h: H * m0 }];
-  if (mise === "portrait") return { mise, dpr, menu: centre, dessus: centre, carte: centre, panneau: centre, feuilles: seul, feuillesMenu: seul, pli: null, s: m0, m: m0 };
+  if (mise === "portrait") {
+    // La carte aussi large que possible, les bandeaux serrés dessus et dessous ; la feuille, elle, va jusqu'aux bords
+    const hp = HAUT_PORTRAIT + PAGE_H + BAS_PORTRAIT;
+    const s = Math.min(cw / W, ch / hp);
+    const x0 = (cw - W * s) / 2;
+    const y0 = (ch - hp * s) / 2;
+    const carte = mat(dpr, x0, y0 + (HAUT_PORTRAIT - HAUT) * s, s);
+    return { mise, dpr, menu: centre, dessus: centre, carte, panneau: carte, feuilles: seul, feuillesMenu: seul, pli: null, s, m: m0, plein: null };
+  }
   if (mise === "bande") {
     const s = Math.min((cw - MARGE * 2) / (W + BANDE), (ch - MARGE * 2) / PAGE_H);
     const x0 = (cw - (W + BANDE) * s) / 2;
@@ -72,7 +88,7 @@ function calculerDans(cw: number, ch: number, dpr: number): Vue {
       carte: mat(dpr, xc, y0 - HAUT * s, s),
       panneau: mat(dpr, xb, y0, s),
       feuilles: [{ x: x0, y: y0, w: (W + BANDE) * s, h: PAGE_H * s }],
-      feuillesMenu: seul, pli: null, s, m: m0,
+      feuillesMenu: seul, pli: null, s, m: m0, plein: null,
     };
   }
   // Le cahier ouvert : la carte sur la page de gauche, le panneau sur celle de droite, rien sur le pli
@@ -98,7 +114,7 @@ function calculerDans(cw: number, ch: number, dpr: number): Vue {
       { x: pli - RELIURE - W * m, y: ym, w: W * m + RELIURE, h: H * m },
       { x: pli, y: ym, w: W * m + RELIURE, h: H * m },
     ],
-    pli, s, m,
+    pli, s, m, plein: null,
   };
 }
 
@@ -124,6 +140,7 @@ export function calculer(cw: number, ch: number, dpr: number, e: Encoches = { ha
     ...v,
     menu: decaler(v.menu), dessus: decaler(v.dessus), carte: decaler(v.carte), panneau: decaler(v.panneau),
     feuilles: rects(v.feuilles), feuillesMenu: rects(v.feuillesMenu), pli: v.pli === null ? null : v.pli + e.gauche,
+    plein: v.mise === "portrait" ? { w: cw, h: ch } : null,
   };
 }
 
@@ -131,4 +148,14 @@ export function calculer(cw: number, ch: number, dpr: number, e: Encoches = { ha
 export function pageDroiteMenu(v: Vue): DOMMatrix {
   const f = v.feuillesMenu[1];
   return mat(v.dpr, f.x + RELIURE, f.y, v.m);
+}
+
+/** Ce que couvre tout l'écran, dans les coordonnées d'une matrice (pour peindre la feuille jusqu'aux bords). */
+export function ecranDans(v: Vue, m: DOMMatrix): Rect {
+  const i = m.inverse();
+  const a = i.transformPoint({ x: 0, y: 0 });
+  const b = i.transformPoint({ x: (v.plein?.w ?? 0) * v.dpr, y: (v.plein?.h ?? 0) * v.dpr });
+  const x = Math.floor(a.x);
+  const y = Math.floor(a.y);
+  return { x, y, w: Math.ceil(b.x) - x, h: Math.ceil(b.y) - y };
 }

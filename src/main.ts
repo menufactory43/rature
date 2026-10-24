@@ -16,7 +16,7 @@ import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
 import { surChangement } from "./reglages";
 import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
-import { RELIURE, calculer, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
+import { RELIURE, calculer, ecranDans, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
 import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
 import { dessinerReglages } from "./ui/reglages";
@@ -29,6 +29,7 @@ const canvas = document.getElementById("jeu") as HTMLCanvasElement;
 ui.ctx = canvas.getContext("2d")!;
 let vue: Vue = calculer(window.innerWidth, window.innerHeight, 1);
 let fond: HTMLCanvasElement | null = null;
+let zoneFond = { x: 0, y: 0, w: W, h: H };
 let table: HTMLCanvasElement | null = null;
 let tableEnPartie: HTMLCanvasElement | null = null;
 
@@ -49,7 +50,9 @@ function redimensionner(): void {
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(ch * dpr);
   vue = calculer(cw, ch, dpr, encoches());
-  fond = papier(W, H, vue.m * dpr, "seyes");
+  // En portrait, la feuille des menus va jusqu'aux bords de l'écran
+  zoneFond = vue.plein ? ecranDans(vue, vue.menu) : { x: 0, y: 0, w: W, h: H };
+  fond = papier(W, H, vue.m * dpr, "seyes", 0, zoneFond);
   const enPixels = (f: Rect[]) => {
     const x = Math.min(...f.map((r) => r.x));
     const y = Math.min(...f.map((r) => r.y));
@@ -229,7 +232,7 @@ function image(maintenant: number): void {
   const unite = enPartie ? vue.s : vue.m;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const t = enPartie ? tableEnPartie : table;
-  if (t) ctx.drawImage(t, 0, 0);
+  if (t && !vue.plein) ctx.drawImage(t, 0, 0);
   // Le cahier : sa couverture et l'épaisseur de ses pages, sous la ou les feuilles
   const x0 = Math.min(...feuilles.map((f) => f.x));
   const y0 = Math.min(...feuilles.map((f) => f.y));
@@ -237,12 +240,12 @@ function image(maintenant: number): void {
   const lh = (Math.max(...feuilles.map((f) => f.y + f.h)) - y0) / unite;
   const dpr = vue.dpr;
   ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
-  dessous(ctx, lw, lh, enPartie ? partie?.page?.cahier ?? 2 : 1);
+  if (!vue.plein) dessous(ctx, lw, lh, enPartie ? partie?.page?.cahier ?? 2 : 1);
   if (vue.pli !== null) reliure(ctx, (vue.pli - x0) / unite, lh, RELIURE / unite);
   if (enPartie) dessinerPartie(vue);
   else {
     ctx.setTransform(vue.menu);
-    if (fond) ctx.drawImage(fond, 0, 0, W, H);
+    if (fond) ctx.drawImage(fond, zoneFond.x, zoneFond.y, zoneFond.w, zoneFond.h);
     if (nav.ecran === "titre") dessinerTitre();
     else if (nav.ecran === "aide") dessinerAide();
     else if (nav.ecran === "campagne") dessinerCampagne();
@@ -262,7 +265,7 @@ function image(maintenant: number): void {
   }
   dessinerAppui();
   ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
-  coinCorne(ctx, lw, lh);
+  if (!vue.plein) coinCorne(ctx, lw, lh);
   tournerPage();
   requestAnimationFrame(image);
 }

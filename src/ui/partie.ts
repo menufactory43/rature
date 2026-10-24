@@ -4,7 +4,7 @@ import * as fx from "../render/fx";
 import { vibrer } from "../vibre";
 import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, boite, feuille, ligne, trait } from "../render/encre";
 import { monstre } from "../render/monstres";
-import { papier } from "../render/papier";
+import { papier, type Zone } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
 import { STYLOS, symbole } from "../render/tours";
 import { icone } from "../render/pouvoirs";
@@ -24,7 +24,7 @@ import { enregistrer, noterPage, sauvegarde } from "../progression";
 import { reglages } from "../reglages";
 import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./base";
 import { nav } from "./nav";
-import { BANDE, PANNEAU_W, type Vue } from "./vue";
+import { BANDE, BAS_PORTRAIT, HAUT_PORTRAIT, PANNEAU_W, ecranDans, type Vue } from "./vue";
 import type { Lockstep, Action } from "../coop/lockstep";
 import { aplatir, empreinte, jouerTour, type Commun } from "../coop/partage";
 import { ouvrirReglages } from "./reglages";
@@ -79,6 +79,8 @@ interface Partie {
   record: boolean;
   fond: HTMLCanvasElement | null;
   echelleFond: number;
+  /** La zone peinte du fond (toute la page, ou tout l'écran en portrait), en unités du cadre. */
+  zoneFond: Zone;
   reste: number;
   /** Le pouvoir armé : le prochain trait le lance. */
   arme: Pouvoir | null;
@@ -99,7 +101,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [],
+    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [],
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -374,9 +376,10 @@ export function leverPartie(e: PointerEvent): void {
 
 // --- Le dessin ---
 
-function fond(p: Partie, echelle: number): HTMLCanvasElement {
-  if (!p.fond || p.echelleFond !== echelle) {
-    const c = papier(W, H, echelle, p.jeu.carte.papier, HAUT);
+function fond(p: Partie, echelle: number, z: Zone): HTMLCanvasElement {
+  const zf = p.zoneFond;
+  if (!p.fond || p.echelleFond !== echelle || zf.x !== z.x || zf.y !== z.y || zf.w !== z.w || zf.h !== z.h) {
+    const c = papier(W, H, echelle, p.jeu.carte.papier, HAUT, z);
     const ctx = c.getContext("2d")!;
     ctx.save();
     ctx.translate(0, HAUT);
@@ -384,6 +387,7 @@ function fond(p: Partie, echelle: number): HTMLCanvasElement {
     ctx.restore();
     p.fond = c;
     p.echelleFond = echelle;
+    p.zoneFond = z;
   }
   return p.fond;
 }
@@ -401,7 +405,8 @@ export function dessinerPartie(v: Vue): void {
     ctx.rect(0, HAUT, W, PAGE_H);
     ctx.clip();
   }
-  ctx.drawImage(fond(p, v.carte.a), 0, 0, W, H);
+  const z = v.plein ? ecranDans(v, v.carte) : { x: 0, y: 0, w: W, h: H };
+  ctx.drawImage(fond(p, v.carte.a, z), z.x, z.y, z.w, z.h);
   ctx.restore();
   // La page
   ctx.save();
@@ -436,8 +441,11 @@ export function dessinerPartie(v: Vue): void {
   }
   let encre = { x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 };
   if (portrait) {
-    ligne(ctx, { x: 4, y: HAUT }, { x: W - 4, y: HAUT }, { couleur: CRAYON, epaisseur: 1.1, graine: 80 });
-    ligne(ctx, { x: 4, y: HAUT + PAGE_H }, { x: W - 4, y: HAUT + PAGE_H }, { couleur: CRAYON, epaisseur: 1.1, graine: 81 });
+    // Les deux traits qui séparent la carte des bandeaux, d'un bord à l'autre de l'écran
+    const xa = Math.min(4, z.x + 4);
+    const xb = Math.max(W - 4, z.x + z.w - 4);
+    ligne(ctx, { x: xa, y: HAUT }, { x: xb, y: HAUT }, { couleur: CRAYON, epaisseur: 1.1, graine: 80 });
+    ligne(ctx, { x: xa, y: HAUT + PAGE_H }, { x: xb, y: HAUT + PAGE_H }, { couleur: CRAYON, epaisseur: 1.1, graine: 81 });
     bandeauHaut(p);
     bandeauBas(p);
   } else {
@@ -835,21 +843,30 @@ function bristol(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   ctx.restore();
 }
 
+/** Le bandeau du haut, sur une seule ligne (HAUT_PORTRAIT de haut, juste au-dessus de la carte) : la pause, les vies,
+ * la vague, puis ce qui vient (appeler la vague suivante) ou, à défaut, le nom de la page, et la vitesse. */
 function bandeauHaut(p: Partie): void {
   const ctx = ui.ctx;
   const j = p.jeu;
-  bouton(8, 8, 38, 30, "II", () => mettrePause(p, true), { taille: 17 });
-  ecrire(ctx, "♥", 62, 22, { couleur: ROUGE, taille: 22 });
-  ecrire(ctx, String(j.vies), 76, 23, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
+  const y = HAUT - HAUT_PORTRAIT / 2;
+  bouton(8, y - 15, 38, 30, "II", () => mettrePause(p, true), { taille: 17 });
+  ecrire(ctx, "♥", 62, y, { couleur: ROUGE, taille: 22 });
+  ecrire(ctx, String(j.vies), 76, y + 1, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
   const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
-  ecrire(ctx, `vague ${Math.max(1, j.vague)}${total}`, 118, 23, { align: "left", taille: 19 });
-  bouton(W - 50, 8, 42, 30, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
-  ecrire(ctx, p.libelle, W - 60, 22, { align: "right", taille: 13, couleur: CRAYON });
+  ecrire(ctx, `vague ${Math.max(1, j.vague)}${total}`, 112, y + 1, { align: "left", taille: 19 });
+  bouton(W - 50, y - 15, 42, 30, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
+  const droite = W - 58;
   if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     const bonus = Math.round(j.prochaine * 2);
-    bouton(W - 230, 40, 222, 18, `▸ vague ${j.vague + 1} dans ${Math.ceil(j.prochaine)} s (+${bonus})`, () => appelerVague(p), { taille: 13 });
-  } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", W - 12, 49, { align: "right", taille: 14, couleur: ROUGE });
-  else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", W - 12, 49, { align: "right", taille: 13, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+    bouton(droite - 150, y - 14, 146, 28, `▸ vague ${j.vague + 1} · ${Math.ceil(j.prochaine)} s (+${bonus})`, () => appelerVague(p), { taille: 13 });
+  } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", droite - 4, y, { align: "right", taille: 15, couleur: ROUGE });
+  else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? "puis une fourniture" : "la vague arrive…", droite - 4, y, { align: "right", taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+  else {
+    // Le nom de la page, rapetissé s'il est long
+    ctx.font = `13px "Patrick Hand", cursive`;
+    const place = droite - 4 - 200;
+    ecrire(ctx, p.libelle, droite - 4, y, { align: "right", taille: 13 * Math.min(1, place / ctx.measureText(p.libelle).width), couleur: CRAYON });
+  }
 }
 
 function bandeauBas(p: Partie): void {
@@ -875,7 +892,7 @@ function bandeauBas(p: Partie): void {
   }
   // Les pouvoirs, à droite ; les gestes permis, tant qu'il reste de la place
   const pouvoirs = j.options.pouvoirs ?? [];
-  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, reglages.gaucher ? 30 + i * 50 : W - 30 - (pouvoirs.length - 1 - i) * 50, y0 + 20));
+  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, reglages.gaucher ? 30 + i * 50 : W - 30 - (pouvoirs.length - 1 - i) * 50, y0 + 19));
   const g = gestesPermis(j);
   const gestes = [
     g.mur && ["mur", "lent"],
@@ -892,7 +909,8 @@ function bandeauBas(p: Partie): void {
   const largeur = Math.min(56, (W - 16) / Math.max(1, types.length));
   types.forEach((t, i) => {
     const x = 8 + i * largeur + largeur / 2;
-    const y = y0 + 60;
+    // Juste sous la première ligne : le bandeau ne fait que BAS_PORTRAIT de haut
+    const y = y0 + BAS_PORTRAIT - 26;
     const cout = coutPose(j, t);
     const possible = j.encre >= cout;
     symbole(ctx, TOURS[t].glyphe, x, y - 6, 9, possible ? STYLOS[t] : CRAYON, 1.8);
