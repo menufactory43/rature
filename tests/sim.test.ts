@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { classer, type Pt } from "../src/sim/gestures";
 import { FORMES, type Glyphe } from "../src/sim/glyphes";
 import { genererCarte, lireCarte, toutesReliees } from "../src/sim/carte";
-import { ajouterEnnemi, ameliorer, blesser, lancerPouvoir, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
+import { ajouterEnnemi, ameliorer, blesser, choisirFourniture, lancerPouvoir, stats, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
 import { ENNEMIS } from "../src/sim/ennemis";
 import { planifier, resume } from "../src/sim/vagues";
-import { PAGES, optionsDePage, optionsPageDuJour } from "../src/sim/pages";
+import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour } from "../src/sim/pages";
 import { TYPES_TOURS } from "../src/sim/tours";
 
 /** Un trait droit tracé en `ms` millisecondes. */
@@ -237,6 +237,41 @@ describe("les pouvoirs", () => {
   it("sans l'avoir gagné, rien", () => {
     const j = jeuVide();
     expect(lancerPouvoir(j, "regle", trait(100, 300, 300, 300, 200)).ok).toBe(false);
+  });
+});
+
+describe("l'interro surprise", () => {
+  it("propose trois fournitures toutes les deux vagues, toujours les mêmes pour la même graine", () => {
+    const jouer = () => {
+      const j = nouveauJeu(optionsInterro(42));
+      j.encre = 1e5;
+      for (const q of j.trajets[0].filter((_, i) => i % 5 === 2)) poserTour(j, "plume", q.x + 26, q.y);
+      lancerVague(j);
+      for (let i = 0; i < 60 * 60 * 5 && !j.choix && j.phase === "jeu"; i++) step(j, 1 / 60);
+      return j;
+    };
+    const j = jouer();
+    expect(j.vague).toBe(2);
+    expect(j.choix).toHaveLength(3);
+    expect(jouer().choix!.map((f) => f.id)).toEqual(j.choix!.map((f) => f.id));
+    // Tant qu'on n'a pas choisi, pas de vague suivante
+    lancerVague(j);
+    expect(j.vague).toBe(2);
+    const f = j.choix![0];
+    expect(choisirFourniture(j, 0)).toBe(true);
+    expect(j.prises).toContain(f.id);
+    expect(j.choix).toBeNull();
+  });
+  it("une tour affûtée frappe plus fort", () => {
+    const j = nouveauJeu(optionsInterro(1));
+    j.encre = 1000;
+    const q = j.trajets[0][8];
+    expect(poserTour(j, "plume", q.x + 26, q.y).ok).toBe(true);
+    const t = j.tours[0];
+    const avant = stats(t).degats;
+    j.boosts.plume.degats *= 1.3;
+    j.boosts.plume.version++;
+    expect(stats(t).degats).toBeCloseTo(avant * 1.3);
   });
 });
 

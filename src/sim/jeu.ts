@@ -318,8 +318,11 @@ export function choisirFourniture(j: Jeu, i: number): boolean {
 // --- Le déroulé des vagues ---
 
 /** Lance la première vague, ou appelle la suivante en avance (bonus d'encre). */
+/** L'interro : une fourniture est due toutes les deux vagues ; on ne peut pas appeler la suite avant de l'avoir choisie. */
+export const fournitureDue = (j: Jeu) => !!j.options.interro && j.vague - j.choixFait >= VAGUES_ENTRE_CHOIX && j.vague < j.regles.total;
+
 export function lancerVague(j: Jeu): void {
-  if (j.choix) return;
+  if (j.choix || (j.phase === "jeu" && fournitureDue(j))) return;
   if (j.phase === "attente") {
     j.phase = "jeu";
     demarrerVague(j);
@@ -813,9 +816,9 @@ export function step(j: Jeu, dt: number): void {
         j.phase = "gagne";
         j.sons.push("page");
       }
-    } else if (j.options.interro && j.vague > j.choixFait && j.vague % VAGUES_ENTRE_CHOIX === 0 && !j.ennemis.length) {
-      // L'interro : la page est vide, on choisit sa fourniture avant la suite
-      if (!j.choix) j.choix = tirer(j);
+    } else if (fournitureDue(j)) {
+      // L'interro : dès que la page est vide, on choisit sa fourniture avant la suite
+      if (!j.choix && !j.ennemis.length) j.choix = tirer(j);
     } else {
       if (j.prochaine === null) j.prochaine = DELAI_VAGUE;
       // Page vide : on n'attend pas pour rien

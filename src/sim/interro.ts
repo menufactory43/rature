@@ -31,18 +31,20 @@ export interface Fourniture {
 /** Toutes les deux vagues, une fois la page vide. */
 export const VAGUES_ENTRE_CHOIX = 2;
 
+const minuscule = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
 function candidats(j: Jeu): Fourniture[] {
   const dispo = j.options.toursDispo;
   const res: Fourniture[] = [];
   for (const t of TYPES_TOURS) {
-    if (!dispo.includes(t)) res.push({ id: `tour-${t}`, nom: TOURS[t].nom, texte: `Nouvelle tour : ${TOURS[t].role.toLowerCase()}`, famille: "tour", tour: t });
+    if (!dispo.includes(t)) res.push({ id: `tour-${t}`, nom: TOURS[t].nom, texte: `Nouvelle tour : ${minuscule(TOURS[t].role)}`, famille: "tour", tour: t });
     else {
       res.push({ id: `affute-${t}`, nom: `${TOURS[t].nom} affûtée`, texte: `${TOURS[t].nom} : +30 % de dégâts`, famille: "boost", tour: t });
       res.push({ id: `vif-${t}`, nom: `${TOURS[t].nom} vive`, texte: `${TOURS[t].nom} : tire 25 % plus vite`, famille: "boost", tour: t });
     }
   }
   for (const p of TYPES_POUVOIRS) {
-    if (!j.options.pouvoirs?.includes(p)) res.push({ id: `pouvoir-${p}`, nom: POUVOIRS[p].nom, texte: `Nouveau pouvoir : ${POUVOIRS[p].conseil.toLowerCase()}`, famille: "pouvoir", pouvoir: p });
+    if (!j.options.pouvoirs?.includes(p)) res.push({ id: `pouvoir-${p}`, nom: POUVOIRS[p].nom, texte: `Nouveau pouvoir : ${minuscule(POUVOIRS[p].conseil)}`, famille: "pouvoir", pouvoir: p });
   }
   if (j.options.pouvoirs?.length) res.push({ id: "recharge", nom: "Taille-crayon", texte: "Les pouvoirs rechargent 30 % plus vite", famille: "pouvoir" });
   res.push(

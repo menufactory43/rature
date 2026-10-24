@@ -6,7 +6,7 @@ import { ENNEMIS } from "../src/sim/ennemis";
 import type { V } from "../src/sim/geom";
 import type { Pt } from "../src/sim/gestures";
 import {
-  ameliorer, appliquerTrace, coutAmelioration, coutPose, coutRature, lancerPouvoir, lancerVague, nouveauJeu, poserTour, refusPose, step, type Jeu, type Options,
+  ameliorer, appliquerTrace, choisirFourniture, coutAmelioration, coutPose, coutRature, lancerPouvoir, lancerVague, nouveauJeu, poserTour, refusPose, step, type Jeu, type Options,
 } from "../src/sim/jeu";
 import { pointSegDist } from "../src/sim/geom";
 import { LARGEUR_REGLE } from "../src/sim/pouvoirs";
@@ -138,6 +138,25 @@ function pouvoirs(j: Jeu, niveau: Niveau): void {
   }
 }
 
+/** L'interro : une nouvelle tour tant qu'il en manque, sinon renforcer la tour la plus posée, sinon de l'encre. */
+function fourniture(j: Jeu): void {
+  const c = j.choix;
+  if (!c) return;
+  const compte = (t?: string) => j.tours.filter((x) => x.type === t).length;
+  let i = c.findIndex((f) => f.famille === "tour" && j.options.toursDispo.length < 4);
+  if (i < 0) {
+    let best = -1;
+    c.forEach((f, k) => {
+      if (f.famille === "boost" && compte(f.tour) > best) {
+        best = compte(f.tour);
+        i = k;
+      }
+    });
+  }
+  if (i < 0) i = Math.max(0, c.findIndex((f) => f.famille === "encre" || f.famille === "pouvoir"));
+  choisirFourniture(j, i);
+}
+
 export function partie(options: Options, niveau: Niveau, graine: number): Jeu {
   const j = nouveauJeu(options);
   const rng = new Rng(graine);
@@ -147,6 +166,7 @@ export function partie(options: Options, niveau: Niveau, graine: number): Jeu {
   let attente = 0;
   for (let i = 0; i < 60 * 60 * 30 && j.phase === "jeu"; i++) {
     step(j, 1 / 60);
+    if (j.choix) fourniture(j);
     attente -= 1 / 60;
     if (niveau !== "passif" && attente <= 0) {
       agir(j, niveau, rng);

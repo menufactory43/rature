@@ -37,12 +37,14 @@ export interface Sauvegarde {
   appris: string[];
   /** Les monstres déjà présentés par leur post-it. */
   vus: string[];
+  /** Le plus de vagues tenues à l'interro surprise. */
+  interro: number;
 }
 
 const CLE = "rature.sauvegarde.v2";
 
 function vide(): Sauvegarde {
-  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [] };
+  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [], interro: 0 };
 }
 
 export let sauvegarde: Sauvegarde = charger();

@@ -7,8 +7,8 @@ import * as musique from "./musique";
 import { ENNEMIS } from "./sim/ennemis";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
-import { ameliorer, blesser, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
-import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "./sim/pages";
+import { ameliorer, blesser, choisirFourniture, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
+import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
 import { colleDebloquee, effacer, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
@@ -63,7 +63,13 @@ function pageDuJour(): void {
   demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS] }), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
 }
 
+/** Une nouvelle graine à chaque interro (et à chaque « nouvelle interro »). */
+function interro(): void {
+  demarrerPartie(() => optionsInterro((Math.random() * 2 ** 31) >>> 0), { mode: "interro", libelle: "Interro surprise" });
+}
+
 actions.jouerPage = jouerPage;
+actions.interro = interro;
 actions.pageDuJour = pageDuJour;
 nav.ouvrirPage = (p) => jouerPage(p, "campagne");
 
@@ -223,5 +229,6 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
   pageDuJour,
   aller: nav.aller,
   pages: PAGES,
-  sim: { poserTour, ameliorer, lancerVague, blesser, lancerPouvoir },
+  sim: { poserTour, ameliorer, lancerVague, blesser, lancerPouvoir, choisirFourniture },
+  interro,
 };

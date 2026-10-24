@@ -9,12 +9,13 @@ import { decor, scene, type Brouillon } from "../render/scene";
 import { symbole } from "../render/tours";
 import { icone } from "../render/pouvoirs";
 import { POUVOIRS, type Pouvoir } from "../sim/pouvoirs";
+import type { Fourniture } from "../sim/interro";
 import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
 import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  choisirFourniture, fournitureDue, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
@@ -25,7 +26,7 @@ import { BAS, H, HAUT, PAGE_H, W, bouton, boutonSon, ui, voile, zone } from "./b
 import { nav } from "./nav";
 import { ouvrirReglages } from "./reglages";
 
-export type Mode = "campagne" | "defi" | "sansFin" | "jour";
+export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro";
 
 interface Partie {
   jeu: Jeu;
@@ -53,6 +54,8 @@ interface Partie {
   arme: Pouvoir | null;
   /** Les monstres qu'on voit pour la première fois : un post-it chacun, l'un après l'autre. */
   nouveaux: { type: TypeEnnemi; depuis: number }[];
+  /** Depuis quand les fournitures sont proposées (pour les faire glisser). */
+  choixDepuis: number;
 }
 
 export let partie: Partie | null = null;
@@ -63,7 +66,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [],
+    fond: null, echelleFond: 0, reste: 0, arme: null, nouveaux: [], choixDepuis: 0,
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -130,6 +133,14 @@ function terminer(p: Partie): void {
     const tenues = j.vague - 1;
     if (tenues > (sauvegarde.sansFin[p.page.id] ?? 0)) {
       sauvegarde.sansFin[p.page.id] = tenues;
+      p.record = true;
+      enregistrer();
+    }
+  }
+  if (p.mode === "interro") {
+    const tenues = gagne ? j.regles.total : j.vague - 1;
+    if (tenues > sauvegarde.interro) {
+      sauvegarde.interro = tenues;
       p.record = true;
       enregistrer();
     }
@@ -304,10 +315,84 @@ export function dessinerPartie(echelle: number): void {
   bandeauBas(p);
   fx.dessinerEcran(ctx, HAUT, W, H);
   postitNouveau(p);
+  if (j.choix) choixFournitures(p, j.choix);
+  else p.choixDepuis = 0;
   if (p.selection) menuTour(p, p.selection);
   if (p.fiches.length) fiche(p.fiches[0], j);
   if (p.pause) dessinerPause();
   if (p.fin) dessinerFin(p);
+}
+
+/** L'interro : trois fiches bristol à choisir, la page vide derrière. */
+function choixFournitures(p: Partie, choix: Fourniture[]): void {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  if (!p.choixDepuis) {
+    p.choixDepuis = ui.temps;
+    p.selection = null;
+    p.arme = null;
+  }
+  const t = ui.temps - p.choixDepuis;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, t * 4) * 0.7;
+  ctx.fillStyle = PAPIER;
+  ctx.fillRect(0, HAUT, W, PAGE_H);
+  ctx.restore();
+  zone(0, HAUT, W, PAGE_H, () => {});
+  ecrire(ctx, "Choisis une fourniture", W / 2, HAUT + 60, { police: "titre", taille: 36, alpha: Math.min(1, t * 3) });
+  ecrire(ctx, `vague ${j.vague} sur ${j.regles.total} tenue`, W / 2, HAUT + 94, { taille: 15, couleur: CRAYON, alpha: Math.min(1, t * 3) });
+  const h = 132;
+  choix.forEach((f, i) => {
+    const arrivee = Math.min(1, Math.max(0, (t - 0.1 - i * 0.12) / 0.3));
+    const e = 1 - (1 - arrivee) ** 3;
+    const x = 30 + (1 - e) * (i % 2 ? W : -W);
+    const y = HAUT + 130 + i * (h + 22);
+    const w = W - 60;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((i - 1) * 0.02);
+    ctx.translate(-w / 2, -h / 2);
+    // La fiche bristol : blanche, lignée de bleu, une ligne rouge en haut
+    ctx.fillStyle = "rgba(40,30,10,0.16)";
+    ctx.fillRect(4, 6, w, h);
+    ctx.fillStyle = "#fffdf6";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(90,130,200,0.35)";
+    ctx.lineWidth = 1;
+    for (let l = 44; l < h; l += 20) {
+      ctx.beginPath();
+      ctx.moveTo(0, l);
+      ctx.lineTo(w, l);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(196,48,43,0.6)";
+    ctx.beginPath();
+    ctx.moveTo(0, 30);
+    ctx.lineTo(w, 30);
+    ctx.stroke();
+    if (f.pacte) rectangle(ctx, 2, 2, w - 4, h - 4, { couleur: ROUGE, epaisseur: 2.2, graine: 300 + i });
+    iconeFourniture(ctx, f, 38, 74);
+    ecrire(ctx, f.nom, 76, 18, { align: "left", police: "titre", taille: 24, couleur: f.pacte ? ROUGE : BLEU });
+    paragraphe(ctx, f.texte, 76 + (w - 96) / 2, 56, w - 96, { taille: 15, couleur: f.pacte ? ROUGE : "#3d3f4a" });
+    if (f.pacte) ecrire(ctx, "pacte", w - 14, 18, { align: "right", taille: 14, couleur: ROUGE, rotation: 0.1 });
+    ctx.restore();
+    if (arrivee >= 1) zone(30, y, w, h, () => choisirFourniture(j, i));
+  });
+}
+
+function iconeFourniture(ctx: CanvasRenderingContext2D, f: Fourniture, x: number, y: number): void {
+  if (f.tour) symbole(ctx, TOURS[f.tour].glyphe, x, y, 16, f.famille === "tour" ? BLEU : CRAYON, 2.4);
+  if (f.famille === "boost") ecrire(ctx, "+", x + (f.tour ? 18 : 0), y - (f.tour ? 16 : 0), { police: "titre", taille: f.tour ? 26 : 44, couleur: ROUGE });
+  else if (f.famille === "pouvoir") icone(ctx, f.pouvoir ?? "regle", x, y, 16, true);
+  else if (f.famille === "encre") {
+    ctx.fillStyle = BLEU;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 18);
+    ctx.quadraticCurveTo(x + 14, y + 4, x, y + 14);
+    ctx.quadraticCurveTo(x - 14, y + 4, x, y - 18);
+    ctx.fill();
+  } else if (f.famille === "defense") ecrire(ctx, "♥", x, y, { taille: 36, couleur: ROUGE });
+  else if (f.famille === "pacte") ecrire(ctx, "!", x, y, { police: "titre", taille: 48, couleur: ROUGE });
 }
 
 const DUREE_POSTIT = 7;
@@ -521,7 +606,7 @@ function bandeauHaut(p: Partie): void {
     const bonus = Math.round(j.prochaine * 2);
     bouton(W - 230, 40, 222, 18, `▸ vague ${j.vague + 1} dans ${Math.ceil(j.prochaine)} s (+${bonus})`, () => lancerVague(j), { taille: 13 });
   } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", W - 12, 49, { align: "right", taille: 14, couleur: ROUGE });
-  else if (j.phase === "jeu") ecrire(ctx, "la vague arrive…", W - 12, 49, { align: "right", taille: 13, couleur: CRAYON });
+  else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", W - 12, 49, { align: "right", taille: 13, couleur: fournitureDue(j) ? ROUGE : CRAYON });
 }
 
 function bandeauBas(p: Partie): void {
@@ -724,7 +809,7 @@ function dessinerPause(): void {
   ecrire(ui.ctx, "Pause", W / 2, 230, { police: "titre", taille: 64 });
   bouton(90, 300, 220, 56, "Reprendre", () => partie && (partie.pause = false), { principal: true });
   bouton(90, 376, 220, 50, "Recommencer la page", recommencer, { taille: 19 });
-  bouton(90, 446, 220, 50, "Quitter la page", () => nav.aller(partie?.mode === "jour" ? "titre" : "campagne"), { taille: 19 });
+  bouton(90, 446, 220, 50, "Quitter la page", () => nav.aller(partie?.mode === "jour" || partie?.mode === "interro" ? "titre" : "campagne"), { taille: 19 });
   bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
   boutonSon(262, 522);
 }
@@ -746,7 +831,8 @@ function dessinerFin(p: Partie): void {
   voile(0.92);
   const gagne = j.phase === "gagne";
   const sansFin = p.mode === "sansFin";
-  const titreFin = sansFin ? "Fin de la page" : gagne ? "Page gagnée !" : "Page perdue";
+  const interro = p.mode === "interro";
+  const titreFin = interro ? (gagne ? "Interro réussie !" : "Copie ramassée") : sansFin ? "Fin de la page" : gagne ? "Page gagnée !" : "Page perdue";
   const t = ui.temps - p.finDepuis;
   // Le titre s'écrit de gauche à droite
   ctx.save();
@@ -786,6 +872,14 @@ function dessinerFin(p: Partie): void {
         }
       }
     }
+  } else if (interro) {
+    // La note de la prof, entourée deux fois au stylo rouge
+    const tenues = gagne ? j.regles.total : j.vague - 1;
+    const note = Math.round((tenues / j.regles.total) * 20);
+    ecrire(ctx, `${note}/20`, W / 2, 222, { police: "titre", taille: 58, couleur: ROUGE, rotation: -0.06 });
+    cercle(ctx, W / 2, 222, 62, { couleur: ROUGE, epaisseur: 2.4, graine: 190 });
+    cercle(ctx, W / 2 + 3, 220, 66, { couleur: ROUGE, epaisseur: 1.2, graine: 191, alpha: 0.7 });
+    ecrire(ctx, `${tenues} vagues tenues · ${j.prises.length} fournitures`, W / 2, 302, { taille: 16, couleur: CRAYON });
   } else if (sansFin) {
     ecrire(ctx, `${j.vague - 1} vagues tenues`, W / 2, 220, { police: "titre", taille: 44, couleur: ROUGE });
   } else if (!gagne) {
@@ -823,8 +917,9 @@ function dessinerFin(p: Partie): void {
     bouton(70, y, 260, 56, "Page suivante", () => nav.ouvrirPage?.(suivante), { principal: true, taille: 22 });
     y += 70;
   }
-  bouton(70, y, 260, 50, "Rejouer cette page", recommencer, { principal: !suivante, taille: 20 });
-  bouton(70, y + 64, 260, 50, p.mode === "jour" ? "Menu" : "Les cahiers", () => nav.aller(p.mode === "jour" ? "titre" : "campagne"), { taille: 20 });
+  const versMenu = p.mode === "jour" || p.mode === "interro";
+  bouton(70, y, 260, 50, p.mode === "interro" ? "Nouvelle interro" : "Rejouer cette page", recommencer, { principal: !suivante, taille: 20 });
+  bouton(70, y + 64, 260, 50, versMenu ? "Menu" : "Les cahiers", () => nav.aller(versMenu ? "titre" : "campagne"), { taille: 20 });
 }
 
 export { PAPIER, cercle, BAS };

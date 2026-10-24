@@ -3,7 +3,7 @@
 //   npm run bot -- 1-3 10       une page, 10 parties
 import { etoiles, type Options } from "../src/sim/jeu";
 import { POUVOIRS, TYPES_POUVOIRS } from "../src/sim/pouvoirs";
-import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "../src/sim/pages";
+import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "../src/sim/pages";
 import { TYPES_TOURS, type TypeTour } from "../src/sim/tours";
 import { partie, type Niveau } from "./joueur";
 
@@ -29,7 +29,7 @@ function bilan(nom: string, options: () => Options, n: number): void {
 
 const args = process.argv.slice(2);
 const n = Number(args.find((a) => /^\d+$/.test(a)) ?? 5);
-const filtre = args.find((a) => /^\d-\d$|^jour$/.test(a));
+const filtre = args.find((a) => /^\d-\d$|^jour$|^interro$/.test(a));
 // Le joueur a tout ce qu'il aurait débloqué en arrivant à cette page
 const debloqueesAvant = (p: Page): TypeTour[] => {
   const t: TypeTour[] = ["plume"];
@@ -47,3 +47,14 @@ for (const p of PAGES) {
   bilan(`${p.id} ${p.nom}`, () => ({ ...optionsDePage(p, { toursDispo: debloqueesAvant(p), colle }), pouvoirs }), n);
 }
 if (!filtre || filtre === "jour") bilan("page du jour", () => ({ ...optionsPageDuJour("2026-10-24", [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS] }), n);
+if (filtre === "interro") {
+  // Plusieurs graines : combien de vagues tient-on en moyenne ?
+  for (const niveau of ["moyen", "fort"] as Niveau[]) {
+    const v: number[] = [];
+    for (let k = 0; k < n; k++) {
+      const j = partie(optionsInterro(7000 + k * 31), niveau, 1000 + k);
+      v.push(j.phase === "gagne" ? 30 : j.vague - 1);
+    }
+    console.log(`interro ${niveau}: ${(v.reduce((a, b) => a + b, 0) / n).toFixed(1)} vagues en moyenne (${v.join(", ")})`);
+  }
+}

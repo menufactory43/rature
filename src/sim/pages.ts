@@ -2,7 +2,7 @@
 import { genererCarte, lireCarte, type Carte, type Papier } from "./carte";
 import type { TypeEnnemi } from "./ennemis";
 import { hashString } from "./rng";
-import type { TypeTour } from "./tours";
+import { TYPES_TOURS as TYPES_TOURS_INTERRO, type TypeTour } from "./tours";
 import type { Defi, Options, Talents } from "./jeu";
 
 export interface Page {
@@ -685,5 +685,22 @@ export function optionsPageDuJour(graine: string, toutes: TypeTour[]): Options {
     },
     encreDepart: 160,
     toursDispo: toutes,
+  };
+}
+
+/** L'interro surprise : une page tirée au hasard, 30 vagues, un boss toutes les 10, la plume et une autre tour pour commencer. */
+export function optionsInterro(graine: number): Options {
+  const carte = genererCarte(graine, "Interro surprise");
+  const autres = TYPES_TOURS_INTERRO.filter((t) => t !== "plume" && t !== "encrier");
+  return {
+    carte,
+    regles: {
+      graine, total: 30, difficulte: 1.15, bossTous: ["mere", "compas", "taille"], entrees: carte.entrees.length,
+      pool: ["gribouille", "carre", "avion", "araignee", "postit", "tache", "fantome", "punaise", "tippex", "gomme"],
+    },
+    encreDepart: 170,
+    toursDispo: ["plume", autres[graine % autres.length]],
+    pouvoirs: [],
+    interro: true,
   };
 }

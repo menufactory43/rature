@@ -18,6 +18,7 @@ import { etoile } from "./partie";
 
 export const actions = {
   pageDuJour: () => {},
+  interro: () => {},
   jouerPage: (_p: Page, _mode: "campagne" | "defi" | "sansFin") => {},
 };
 
@@ -98,7 +99,9 @@ export function dessinerTitre(): void {
   bouton(60, 480, 280, 64, "Campagne", () => nav.aller("campagne"), { principal: true, sous: etoiles ? `${etoiles} étoile${etoiles > 1 ? "s" : ""}` : "trois cahiers à défendre" });
   const jour = grainePageDuJour();
   const mj = sauvegarde.jour[jour];
-  bouton(60, 560, 280, 64, "Page du jour", () => actions.pageDuJour(), { sous: mj ? `record : ${mj.vagues} vagues, ${mj.vies} vies` : "la même page pour tout le monde" });
+  bouton(60, 560, 134, 64, "Page du jour", () => actions.pageDuJour(), { taille: 19, sous: mj ? `${mj.vagues} vagues, ${mj.vies} ♥` : "la même pour tous" });
+  const ri = sauvegarde.interro;
+  bouton(206, 560, 134, 64, "Interro", () => actions.interro(), { taille: 19, sous: ri ? `record : ${Math.round((ri / 30) * 20)}/20` : "surprise !" });
   bouton(60, 640, 134, 50, "Comment jouer", () => nav.aller("aide"), { taille: 17 });
   bouton(206, 640, 134, 50, "Trousse", () => nav.aller("trousse"), { taille: 18 });
   bouton(60, 702, 280, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
