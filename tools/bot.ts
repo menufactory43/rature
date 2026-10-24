@@ -1,110 +1,157 @@
-// Le joueur automatique : règle la difficulté sans jouer à la main.
-//   npm run bot               (40 pages par niveau de joueur)
-//   npm run bot -- 200
-// « passif » ne dessine jamais ; « moyen » joue comme un humain correct (un geste toutes les 0,6 s, réflexes simples) ;
-// « fort » réagit plus vite et vise mieux. Objectif : le passif perd vers la vague 5, le moyen tient la moitié de la page,
-// le fort gagne parfois.
+// Le joueur automatique : règle la difficulté des pages sans y jouer à la main.
+//   npm run bot                 toutes les pages, 5 parties par niveau
+//   npm run bot -- 1-3 10       une page, 10 parties
+// « passif » ne fait rien ; « moyen » pose et améliore des tours, à des places correctes ; « fort » choisit mieux,
+// rature les volants et les furtifs qui approchent du Cœur, et dépense son encre sans traîner.
+// Objectif par page : le passif perd, le moyen gagne souvent sans 3 étoiles, le fort fait 3 étoiles la plupart du temps.
 import { ENNEMIS } from "../src/sim/ennemis";
-import type { IdAmelioration } from "../src/sim/ameliorations";
+import type { V } from "../src/sim/geom";
 import type { Pt } from "../src/sim/gestures";
-import { appliquerTrace, choisir, coutParPx, coutRature, lancer, nouveauJeu, step, vaguesTenues, type Ennemi, type Jeu } from "../src/sim/jeu";
+import {
+  ameliorer, appliquerTrace, coutAmelioration, coutPose, coutRature, etoiles, lancerVague, nouveauJeu, poserTour, refusPose, step, type Jeu, type Options,
+} from "../src/sim/jeu";
+import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "../src/sim/pages";
+import { Rng } from "../src/sim/rng";
+import { PORTEE_INFINIE, TOURS, TYPES_TOURS, statsTour, type TypeTour } from "../src/sim/tours";
 
-type Niveau = "passif" | "moyen" | "fort";
-const PREFERENCES: IdAmelioration[] = ["appui", "foudre", "roquette", "cadence", "scie", "plume", "reparation", "affutee", "encrier", "encreEpaisse", "colle", "econome"];
+export type Niveau = "passif" | "moyen" | "fort";
 
-function ligne(x1: number, y1: number, x2: number, y2: number, ms: number): Pt[] {
-  return Array.from({ length: 13 }, (_, i) => ({ x: x1 + ((x2 - x1) * i) / 12, y: y1 + ((y2 - y1) * i) / 12, t: (ms * i) / 12 }));
-}
-function boucle(cx: number, cy: number, r: number): Pt[] {
-  return Array.from({ length: 33 }, (_, i) => ({ x: cx + Math.cos((i / 32) * 6.283) * r, y: cy + Math.sin((i / 32) * 6.283) * r, t: i * 25 }));
-}
-const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-
-function jouerGeste(j: Jeu, niveau: Niveau, rng: () => number): boolean {
-  const t = j.tour;
-  const vivants = j.ennemis.filter((e) => !e.mort);
-  if (!vivants.length) return false;
-  const vise = niveau === "fort" ? 4 : 12; // imprécision du doigt
-  const bruit = () => (rng() - 0.5) * vise;
-  // 1. Les volants et les gommes proches : rature
-  const menaces = vivants.filter((e) => (ENNEMIS[e.type].vole || e.type === "gomme") && d(e, t) < 180).sort((a, b) => d(a, t) - d(b, t));
-  if (menaces.length && j.encre >= coutRature(j, 90)) {
-    const e = menaces[0];
-    const a = Math.atan2(e.y - t.y, e.x - t.x) + Math.PI / 2;
-    const cx = e.x + bruit();
-    const cy = e.y + bruit();
-    appliquerTrace(j, ligne(cx - Math.cos(a) * 45, cy - Math.sin(a) * 45, cx + Math.cos(a) * 45, cy + Math.sin(a) * 45, 100));
-    return true;
-  }
-  const sol = vivants.filter((e) => !ENNEMIS[e.type].vole);
-  // 2. Un paquet au sol : colle
-  let paquet: Ennemi | null = null;
-  let taille = 0;
-  for (const e of sol) {
-    if (d(e, t) > 200 || d(e, t) < 60) continue;
-    const n = sol.filter((o) => d(o, e) < 45).length;
-    if (n > taille) {
-      taille = n;
-      paquet = e;
+function place(j: Jeu, type: TypeTour, rng: Rng, bruit: number): V | null {
+  const portee = statsTour(type, 1, 0).portee || 60;
+  const pts = j.trajets.flat();
+  let best: V | null = null;
+  let bs = -1;
+  for (let y = 20; y < 710; y += 20) {
+    for (let x = 20; x < 390; x += 20) {
+      if (refusPose(j, x, y)) continue;
+      let s = 0;
+      let surChemin = false;
+      for (const q of pts) {
+        const d = Math.hypot(q.x - x, q.y - y);
+        if (d < 18) surChemin = true;
+        if (d < portee) s += 1 + (portee >= PORTEE_INFINIE ? 0 : 0.002 * Math.hypot(q.x - j.carte.coeur.x, q.y - j.carte.coeur.y) * 0);
+      }
+      if (surChemin) continue;
+      if (type === "encrier") s = 1000 - Math.hypot(x - j.carte.coeur.x, y - j.carte.coeur.y) * 0 - s;
+      if (type === "correction") s = 1000 - Math.hypot(x - j.carte.coeur.x, y - j.carte.coeur.y);
+      s *= 1 + (rng.next() - 0.5) * bruit;
+      if (s > bs) {
+        bs = s;
+        best = { x, y };
+      }
     }
   }
-  if (paquet && taille >= 4 && j.encre >= 2 * Math.PI * 45 * coutParPx(j) + 10) {
-    appliquerTrace(j, boucle(paquet.x + bruit(), paquet.y + bruit(), 45));
-    return true;
-  }
-  // 3. Le plus proche au sol, pas encore bloqué : un mur devant lui
-  const libres = sol.filter((e) => !e.bloque && d(e, t) < 170 && d(e, t) > 70).sort((a, b) => d(a, t) - d(b, t));
-  if (libres.length && j.encre >= 110 * coutParPx(j) + 5) {
-    const e = libres[0];
-    const a = Math.atan2(e.y - t.y, e.x - t.x);
-    const r = d(e, t) - 30;
-    const cx = t.x + Math.cos(a) * r + bruit();
-    const cy = t.y + Math.sin(a) * r + bruit();
-    const p = a + Math.PI / 2;
-    appliquerTrace(j, ligne(cx - Math.cos(p) * 55, cy - Math.sin(p) * 55, cx + Math.cos(p) * 55, cy + Math.sin(p) * 55, 1100));
-    return true;
-  }
-  // 4. Les gros près de la tour : rature
-  const gros = vivants.filter((e) => d(e, t) < 120).sort((a, b) => b.pv - a.pv)[0];
-  if (gros && j.encre >= 60) {
-    const cx = gros.x + bruit();
-    const cy = gros.y + bruit();
-    appliquerTrace(j, ligne(cx - 40, cy - 10, cx + 40, cy + 10, 100));
-    return true;
-  }
-  return false;
+  return best;
 }
 
-export function partie(graine: string, niveau: Niveau): Jeu {
-  const j = nouveauJeu(graine);
-  let s = (graine.length * 2654435761) >>> 0;
-  const rng = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const delai = niveau === "fort" ? 0.4 : 0.6;
+function ligne(c: V, angle: number, demi: number, ms: number): Pt[] {
+  return Array.from({ length: 11 }, (_, i) => {
+    const k = i / 10 - 0.5;
+    return { x: c.x + Math.cos(angle) * demi * 2 * k, y: c.y + Math.sin(angle) * demi * 2 * k, t: ms * (i / 10) };
+  });
+}
+
+/** Une action par appel ; renvoie vrai si quelque chose a été fait. */
+function agir(j: Jeu, niveau: Niveau, rng: Rng): boolean {
+  const fort = niveau === "fort";
+  // Les menaces qui approchent du Cœur : une rature (fort seulement)
+  if (fort && j.phase === "jeu") {
+    const c = j.carte.coeur;
+    const menace = j.ennemis.find((e) => !e.mort && (ENNEMIS[e.type].vole || ENNEMIS[e.type].furtif || ENNEMIS[e.type].soigne) && Math.hypot(e.x - c.x, e.y - c.y) < 160 && e.x > 0 && e.y > 0);
+    if (menace && j.encre > coutRature(80) + 20) {
+      appliquerTrace(j, ligne({ x: menace.x + (rng.next() - 0.5) * 6, y: menace.y + (rng.next() - 0.5) * 6 }, rng.next() * Math.PI, 40, 100));
+      return true;
+    }
+  }
+  const dispo = j.options.toursDispo;
+  const nbTours = j.tours.length;
+  // Améliorer quand on a déjà assez de tours
+  const cible = 3 + Math.floor(j.vague / (fort ? 2 : 3));
+  if (nbTours >= cible || nbTours >= 10) {
+    const candidates = j.tours.filter((t) => t.type !== "encrier" || fort).sort((a, b) => a.niveau - b.niveau);
+    for (const t of candidates) {
+      if (t.niveau < 3) {
+        const c = coutAmelioration(j, t)!;
+        if (j.encre >= c) return ameliorer(j, t);
+        return false;
+      }
+      if (!t.spec && j.vague >= 4) {
+        const spec = fort ? (t.type === "plume" ? 1 : t.type === "spirale" ? 1 : rng.next() < 0.5 ? 1 : 2) : 1 + Math.floor(rng.next() * 2);
+        const c = coutAmelioration(j, t, spec)!;
+        if (j.encre >= c) return ameliorer(j, t, spec);
+        return false;
+      }
+    }
+  }
+  // Poser une tour : un ordre de préférence selon ce qui manque
+  const compte = (ty: TypeTour) => j.tours.filter((t) => t.type === ty).length;
+  const ordre: TypeTour[] = fort
+    ? ["plume", "roquette", "plume", "foudre", "correction", "spirale", "roquette", "scie", "foudre", "correction", "encrier"]
+    : ["plume", "roquette", "plume", "foudre", "roquette", "correction", "spirale", "scie"];
+  const voulu = ordre.find((ty, i) => dispo.includes(ty) && compte(ty) < ordre.slice(0, i + 1).filter((o) => o === ty).length) ?? dispo[Math.floor(rng.next() * dispo.length)];
+  if (j.encre < coutPose(j, voulu)) return false;
+  const p = place(j, voulu, rng, niveau === "moyen" ? 0.4 : 0.1);
+  if (!p) return false;
+  return poserTour(j, voulu, p.x, p.y).ok;
+}
+
+export function partie(options: Options, niveau: Niveau, graine: number): Jeu {
+  const j = nouveauJeu(options);
+  const rng = new Rng(graine);
+  if (niveau !== "passif") for (let k = 0; k < 8 && agir(j, niveau, rng); k++);
+  lancerVague(j);
+  const delai = niveau === "fort" ? 0.4 : 0.8;
   let attente = 0;
-  for (let i = 0; i < 60 * 60 * 40; i++) {
-    if (j.phase === "perdu" || j.phase === "gagne") break;
-    if (j.phase === "choix") {
-      choisir(j, [...j.offres].sort((a, b) => PREFERENCES.indexOf(a) - PREFERENCES.indexOf(b))[0]);
-      continue;
-    }
-    if (j.phase === "prep") lancer(j);
+  for (let i = 0; i < 60 * 60 * 30 && j.phase === "jeu"; i++) {
     step(j, 1 / 60);
     attente -= 1 / 60;
-    if (niveau !== "passif" && attente <= 0 && j.phase === "vague" && jouerGeste(j, niveau, rng)) attente = delai;
+    if (niveau !== "passif" && attente <= 0) {
+      agir(j, niveau, rng);
+      attente = delai;
+    }
   }
   return j;
 }
 
-const n = Number(process.argv[2] ?? 40);
-for (const niveau of ["passif", "moyen", "fort"] as Niveau[]) {
-  const tenues: number[] = [];
-  let gagnees = 0;
-  for (let i = 0; i < n; i++) {
-    const j = partie("bot-" + i, niveau);
-    tenues.push(vaguesTenues(j));
-    if (j.phase === "gagne") gagnees++;
+function bilan(nom: string, options: () => Options, n: number): void {
+  const lignes: string[] = [];
+  for (const niveau of ["passif", "moyen", "fort"] as Niveau[]) {
+    let gagnees = 0;
+    let vies = 0;
+    let etoilesTot = 0;
+    const vagues: number[] = [];
+    for (let k = 0; k < (niveau === "passif" ? 1 : n); k++) {
+      const j = partie(options(), niveau, 1000 + k);
+      if (j.phase === "gagne") gagnees++;
+      vies += j.vies;
+      etoilesTot += etoiles(j);
+      vagues.push(j.phase === "gagne" ? j.regles.total : j.vague);
+    }
+    const m = niveau === "passif" ? 1 : n;
+    lignes.push(`${niveau}: ${gagnees}/${m} gagnées, ${(vies / m).toFixed(1)} vies, ${(etoilesTot / m).toFixed(1)} ★, vagues ${Math.min(...vagues)}–${Math.max(...vagues)}`);
   }
-  tenues.sort((a, b) => a - b);
-  const moy = tenues.reduce((a, b) => a + b, 0) / n;
-  console.log(`${niveau.padEnd(7)} vagues tenues : médiane ${tenues[Math.floor(n / 2)]}, moyenne ${moy.toFixed(1)}, min ${tenues[0]}, max ${tenues[n - 1]} · gagnées ${gagnees}/${n}`);
+  console.log(`${nom.padEnd(18)} ${lignes.join("  |  ")}`);
+}
+
+if (import.meta.url.endsWith("bot.ts") && process.argv[1]?.includes("bot")) main();
+function main(): void {
+const args = process.argv.slice(2);
+const n = Number(args.find((a) => /^\d+$/.test(a)) ?? 5);
+const filtre = args.find((a) => /^\d-\d$|^jour$/.test(a));
+// Le joueur a tout ce qu'il aurait débloqué en arrivant à cette page
+const debloqueesAvant = (p: Page): TypeTour[] => {
+  const t: TypeTour[] = ["plume"];
+  for (const q of PAGES) {
+    if (q === p) break;
+    if (q.debloque && q.debloque !== "colle") t.push(q.debloque);
+  }
+  return t;
+};
+for (const p of PAGES) {
+  if (filtre && filtre !== p.id) continue;
+  const colle = PAGES.slice(0, PAGES.indexOf(p)).some((q) => q.debloque === "colle");
+  bilan(`${p.id} ${p.nom}`, () => optionsDePage(p, { toursDispo: debloqueesAvant(p), colle }), n);
+}
+if (!filtre || filtre === "jour") bilan("page du jour", () => optionsPageDuJour("2026-10-24", [...TYPES_TOURS]), n);
+void TOURS;
 }

@@ -1,0 +1,67 @@
+// Ce que partagent tous les écrans : la mise en page, les boutons (refaits à chaque image), quelques éléments dessinés.
+import * as audio from "../audio";
+import { BLEU, CRAYON, ROUGE, ecrire, rectangle, trait } from "../render/encre";
+
+export const W = 400;
+/** Bandeau du haut, page (720), bandeau du bas (encre et pense-bête). */
+export const HAUT = 60;
+export const PAGE_H = 720;
+export const BAS = 90;
+export const H = HAUT + PAGE_H + BAS;
+
+export interface Bouton {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  action: () => void;
+}
+
+export const ui = {
+  ctx: null as unknown as CanvasRenderingContext2D,
+  boutons: [] as Bouton[],
+  temps: 0,
+};
+
+export interface OptionsBouton {
+  principal?: boolean;
+  taille?: number;
+  sous?: string;
+  inactif?: boolean;
+  couleur?: string;
+}
+
+export function bouton(x: number, y: number, w: number, h: number, texte: string, action: () => void, o: OptionsBouton = {}): void {
+  const ctx = ui.ctx;
+  const couleur = o.inactif ? CRAYON : o.couleur ?? (o.principal ? ROUGE : BLEU);
+  rectangle(ctx, x, y, w, h, { couleur, epaisseur: o.principal ? 2.4 : 1.8, graine: Math.round(x * 7 + y), fond: "rgba(246,239,220,0.94)" });
+  if (o.sous) {
+    ecrire(ctx, texte, x + w / 2, y + h / 2 - 8, { couleur, taille: o.taille ?? 22 });
+    ecrire(ctx, o.sous, x + w / 2, y + h / 2 + 13, { couleur: CRAYON, taille: 13 });
+  } else ecrire(ctx, texte, x + w / 2, y + h / 2 + 1, { couleur, taille: o.taille ?? 22 });
+  if (!o.inactif) ui.boutons.push({ x, y, w, h, action });
+}
+
+/** Une zone touchable sans dessin. */
+export function zone(x: number, y: number, w: number, h: number, action: () => void): void {
+  ui.boutons.push({ x, y, w, h, action });
+}
+
+export function voile(alpha = 0.85): void {
+  ui.ctx.fillStyle = `rgba(246,239,220,${alpha})`;
+  ui.ctx.fillRect(0, 0, W, H);
+}
+
+export function souligner(x: number, y: number, w: number, graine: number): void {
+  trait(ui.ctx, [{ x: x - w / 2, y }, { x, y: y + 3 }, { x: x + w / 2, y: y - 1 }], { couleur: ROUGE, epaisseur: 2.2, graine });
+}
+
+export function boutonSon(x: number, y: number): void {
+  bouton(x, y, 40, 32, audio.actif ? "♪" : "×♪", () => audio.basculer(), { taille: 18 });
+}
+
+export function titre(texte: string, y: number, taille = 44): void {
+  ecrire(ui.ctx, texte, W / 2, y, { police: "titre", taille });
+  ui.ctx.font = `700 ${taille}px Caveat, cursive`;
+  souligner(W / 2, y + taille * 0.55, Math.min(320, ui.ctx.measureText(texte).width * 0.8), Math.round(y));
+}

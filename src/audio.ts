@@ -99,6 +99,11 @@ export function jouer(sons: Son[]): void {
       case "colle": bip(300, 0.2, "sine", 0.08, 0.6); break;
       case "sec": bip(180, 0.1, "square", 0.05); break;
       case "page": souffle(0.4, 900, 0.14, 0.5); break;
+      case "pose": souffle(0.06, 2200, 0.1); bip(660, 0.1, "triangle", 0.08, 1.5); break;
+      case "refus": bip(160, 0.12, "square", 0.05, 0.9); break;
+      case "vague": bip(330, 0.3, "triangle", 0.1, 1.3); bip(440, 0.3, "triangle", 0.06, 1.3); break;
+      case "ding": bip(1320, 0.4, "sine", 0.08, 0.98); break;
+      case "coche": bip(880, 0.08, "sine", 0.08, 1.4); break;
       case "boss": bip(110, 0.8, "sawtooth", 0.08, 0.7); bip(116, 0.8, "sawtooth", 0.06, 0.7); break;
     }
   }

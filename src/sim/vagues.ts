@@ -1,15 +1,23 @@
-// Les vagues, générées depuis la graine. Annoncées à l'avance : composition et directions.
+// Les vagues, générées depuis la graine de la page : identiques pour tout le monde, annoncées à l'avance.
 import { ENNEMIS, type TypeEnnemi } from "./ennemis";
 import { Rng } from "./rng";
 
-export const DERNIERE_VAGUE = 20;
-export const VAGUES_BOSS: Partial<Record<number, TypeEnnemi>> = { 10: "mere", 20: "compas" };
+export interface ReglesVagues {
+  graine: number;
+  /** Nombre de vagues (Infinity : sans fin). */
+  total: number;
+  /** Les monstres de la page, dans leur ordre d'arrivée. */
+  pool: TypeEnnemi[];
+  difficulte: number;
+  /** Le boss de la dernière vague (et, en sans fin, toutes les 10 vagues). */
+  boss?: TypeEnnemi;
+  entrees: number;
+}
 
 export interface Groupe {
   type: TypeEnnemi;
   nombre: number;
-  /** Direction d'arrivée, en radians depuis la tour. */
-  angle: number;
+  entree: number;
   /** Secondes après le début de la vague. */
   a: number;
 }
@@ -17,32 +25,39 @@ export interface Groupe {
 export interface PlanVague {
   numero: number;
   groupes: Groupe[];
-  /** Les directions d'arrivée (pour les flèches dans la marge). */
-  fronts: number[];
 }
 
-const TYPES_COURANTS: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "gomme"];
+export const budget = (n: number) => 8 + 5 * n + 0.3 * n * n;
 
-export function budget(n: number): number {
-  return 6 + 4.5 * n + 0.34 * n * n;
+/** La vague où chaque monstre de la page apparaît pour la première fois. */
+export function premiereVague(r: ReglesVagues, i: number): number {
+  if (i === 0) return 1;
+  const etendue = Number.isFinite(r.total) ? r.total : 12;
+  return Math.max(2, Math.round((i * etendue) / (r.pool.length + 0.5)));
 }
 
-export function planifier(graine: number, n: number): PlanVague {
-  const rng = new Rng(graine ^ Math.imul(n, 0x9e3779b1));
-  const boss = VAGUES_BOSS[n];
-  let reste = budget(n) * (boss ? 0.6 : 1);
-  const dispo = TYPES_COURANTS.filter((t) => ENNEMIS[t].vague <= n);
-  const nbFronts = Math.min(4, 1 + Math.floor(n / 4));
-  const base = rng.range(0, Math.PI * 2);
-  const fronts: number[] = [];
-  for (let i = 0; i < nbFronts; i++) fronts.push(base + (i * Math.PI * 2) / nbFronts + rng.range(-0.35, 0.35));
-  const duree = Math.min(30, 12 + n * 0.9);
+export const estVagueBoss = (r: ReglesVagues, n: number) => !!r.boss && (Number.isFinite(r.total) ? n === r.total : n % 10 === 0);
+
+export function planifier(r: ReglesVagues, n: number): PlanVague {
+  const rng = new Rng(r.graine ^ Math.imul(n, 0x9e3779b1));
+  const boss = estVagueBoss(r, n) ? r.boss : undefined;
+  let reste = budget(n) * r.difficulte * (boss ? 0.5 : 1);
+  const dispo = r.pool.filter((t, i) => premiereVague(r, i) <= n && ENNEMIS[t].cout > 0);
+  const nouveaux = r.pool.filter((_, i) => premiereVague(r, i) === n);
+  const duree = Math.min(28, 10 + n * 0.8);
   const groupes: Groupe[] = [];
-  if (boss) groupes.push({ type: boss, nombre: 1, angle: rng.pick(fronts), a: 3 });
+  if (boss) groupes.push({ type: boss, nombre: 1, entree: rng.int(0, r.entrees - 1), a: 4 });
+  // Un nouveau venu arrive seul en tête de vague, pour qu'on le remarque
+  for (const t of nouveaux) {
+    const f = ENNEMIS[t];
+    if (f.cout > reste) continue;
+    const nombre = f.groupe[0];
+    reste -= nombre * f.cout;
+    groupes.push({ type: t, nombre, entree: rng.int(0, r.entrees - 1), a: 0.5 });
+  }
   let garde = 0;
-  while (reste >= 1 && garde++ < 200) {
-    // Les nouveaux venus sont un peu plus fréquents : on les voit vite
-    const poids = dispo.map((t) => (ENNEMIS[t].vague >= n - 2 ? 1.6 : 1) * (t === "gribouille" ? 1.4 : 1));
+  while (reste >= 1 && garde++ < 300) {
+    const poids = dispo.map((t) => (t === "gribouille" ? 1.4 : 1));
     let tirage = rng.next() * poids.reduce((s, p) => s + p, 0);
     let type = dispo[0];
     for (let i = 0; i < dispo.length; i++) {
@@ -52,25 +67,21 @@ export function planifier(graine: number, n: number): PlanVague {
         break;
       }
     }
+    if (ENNEMIS[type].cout > reste) type = "gribouille";
     const f = ENNEMIS[type];
-    if (f.cout > reste) {
-      if (reste < 1) break;
-      type = "gribouille";
-    }
-    const g = ENNEMIS[type];
-    const nombre = Math.max(1, Math.min(rng.int(g.groupe[0], g.groupe[1]), Math.floor(reste / g.cout)));
-    reste -= nombre * g.cout;
-    groupes.push({ type, nombre, angle: rng.pick(fronts) + rng.range(-0.15, 0.15), a: rng.range(0, duree) });
+    const nombre = Math.max(1, Math.min(rng.int(f.groupe[0], f.groupe[1]), Math.floor(reste / f.cout)));
+    reste -= nombre * f.cout;
+    groupes.push({ type, nombre, entree: rng.int(0, r.entrees - 1), a: rng.range(0.5, duree) });
   }
-  // La toute première vague démarre doucement, par un seul côté
   groupes.sort((a, b) => a.a - b.a);
-  if (groupes.length && !boss) groupes[0].a = Math.min(groupes[0].a, 1);
-  return { numero: n, groupes, fronts };
+  return { numero: n, groupes };
 }
 
 /** Le résumé affiché avant la vague : « 6 gribouilles · 2 avions en papier ». */
 export function resume(plan: PlanVague): { type: TypeEnnemi; nombre: number }[] {
   const compte = new Map<TypeEnnemi, number>();
   for (const g of plan.groupes) compte.set(g.type, (compte.get(g.type) ?? 0) + g.nombre);
-  return [...compte.entries()].map(([type, nombre]) => ({ type, nombre })).sort((a, b) => (ENNEMIS[b.type].boss ? 1 : 0) - (ENNEMIS[a.type].boss ? 1 : 0) || b.nombre - a.nombre);
+  return [...compte.entries()]
+    .map(([type, nombre]) => ({ type, nombre }))
+    .sort((a, b) => (ENNEMIS[b.type].boss ? 1 : 0) - (ENNEMIS[a.type].boss ? 1 : 0) || b.nombre - a.nombre);
 }

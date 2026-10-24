@@ -1,134 +1,195 @@
 import { describe, expect, it } from "vitest";
 import { classer, type Pt } from "../src/sim/gestures";
-import { appliquerTrace, ajouterEnnemi, choisir, lancer, nouveauJeu, step, TOUR_X, TOUR_Y, type Jeu } from "../src/sim/jeu";
-import { planifier, resume, DERNIERE_VAGUE } from "../src/sim/vagues";
+import { FORMES, type Glyphe } from "../src/sim/glyphes";
+import { genererCarte, lireCarte, toutesReliees } from "../src/sim/carte";
+import { ajouterEnnemi, ameliorer, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
 import { ENNEMIS } from "../src/sim/ennemis";
-import { resample, polylineLength } from "../src/sim/geom";
+import { planifier, resume } from "../src/sim/vagues";
+import { PAGES, optionsDePage, optionsPageDuJour } from "../src/sim/pages";
+import { TYPES_TOURS } from "../src/sim/tours";
 
-/** Un trait droit de (x1, y1) à (x2, y2) tracé en `ms` millisecondes. */
+/** Un trait droit tracé en `ms` millisecondes. */
 function trait(x1: number, y1: number, x2: number, y2: number, ms: number, n = 20): Pt[] {
   return Array.from({ length: n + 1 }, (_, i) => ({ x: x1 + ((x2 - x1) * i) / n, y: y1 + ((y2 - y1) * i) / n, t: (ms * i) / n }));
 }
 function boucle(cx: number, cy: number, r: number, ms: number): Pt[] {
   return Array.from({ length: 41 }, (_, i) => ({ x: cx + Math.cos((i / 40) * Math.PI * 2) * r, y: cy + Math.sin((i / 40) * Math.PI * 2) * r, t: (ms * i) / 40 }));
 }
-function enVague(j: Jeu) {
-  lancer(j);
-  step(j, 1 / 60);
+/** Un symbole dessiné à la main (un peu de tremblé), centré en (cx, cy). */
+function symbole(g: Glyphe, cx: number, cy: number, taille = 28): Pt[] {
+  const f = FORMES[g][0];
+  return f.map((p, i) => ({ x: cx + p.x * taille + Math.sin(i * 1.7) * 1.2, y: cy + p.y * taille + Math.cos(i * 2.3) * 1.2, t: i * 15 }));
+}
+
+const VIDE = `
+.........EE.........
+${"....................\n".repeat(31)}.........CC.........
+.........CC.........
+....................
+....................`;
+
+function jeuVide(): Jeu {
+  const carte = lireCarte("vide", VIDE);
+  const o: Options = { carte, regles: { graine: 1, total: 5, pool: ["gribouille"], difficulte: 1, entrees: 1 }, encreDepart: 1000, toursDispo: [...TYPES_TOURS] };
+  const j = nouveauJeu(o);
+  lancerVague(j);
   j.file = [];
-  j.ennemis = [];
+  return j;
 }
 const images = (j: Jeu, s: number) => { for (let i = 0; i < s * 60; i++) step(j, 1 / 60); };
 
-describe("gestes", () => {
-  it("lent = mur, sec = rature, boucle = colle, tapotis = rien", () => {
-    expect(classer(trait(0, 0, 150, 0, 900))).toBe("mur");
-    expect(classer(trait(0, 0, 150, 0, 120))).toBe("rature");
-    expect(classer(boucle(100, 100, 50, 900))).toBe("cercle");
-    expect(classer(boucle(100, 100, 50, 150))).toBe("cercle");
-    expect(classer(trait(0, 0, 5, 0, 300))).toBe("rien");
+describe("gestes et symboles", () => {
+  it("grand trait lent = mur, sec = rature, grande boucle = colle", () => {
+    expect(classer(trait(0, 0, 150, 0, 900)).geste).toBe("mur");
+    expect(classer(trait(0, 0, 150, 0, 120)).geste).toBe("rature");
+    expect(classer(boucle(100, 100, 60, 900)).geste).toBe("cercle");
+    expect(classer(trait(0, 0, 5, 0, 300)).geste).toBe("rien");
   });
-  it("le rééchantillonnage garde la longueur", () => {
-    const pts = trait(0, 0, 100, 0, 100, 3);
-    const r = resample(pts, 12);
-    expect(polylineLength(r)).toBeCloseTo(100, 0);
+  it("chaque petit symbole devient sa tour", () => {
+    for (const g of Object.keys(FORMES) as Glyphe[]) {
+      const c = classer(symbole(g, 200, 300));
+      expect(c, g).toEqual({ geste: "tour", glyphe: g });
+    }
+  });
+  it("un petit trait droit n'est pas un symbole", () => {
+    expect(classer(trait(0, 0, 60, 10, 400)).geste).not.toBe("tour");
+  });
+});
+
+describe("cartes", () => {
+  it("toutes les pages se lisent et chaque entrée rejoint le Cœur", () => {
+    for (const p of PAGES) {
+      const o = optionsDePage(p, { toursDispo: ["plume"], colle: true });
+      expect(o.carte.entrees.length, p.id).toBeGreaterThan(0);
+      expect(toutesReliees(o.carte), p.id).toBe(true);
+    }
+  });
+  it("les cartes générées sont jouables et reproductibles", () => {
+    for (let g = 0; g < 200; g++) {
+      const c = genererCarte(g);
+      expect(toutesReliees(c)).toBe(true);
+      expect(c.entrees.length).toBeGreaterThan(0);
+    }
+    expect(genererCarte(7).blocs).toEqual(genererCarte(7).blocs);
   });
 });
 
 describe("vagues", () => {
-  it("même graine, même page", () => {
-    expect(planifier(42, 7)).toEqual(planifier(42, 7));
-    expect(planifier(42, 7)).not.toEqual(planifier(43, 7));
-  });
-  it("chaque monstre attend sa vague, les boss ont la leur", () => {
-    for (let n = 1; n <= DERNIERE_VAGUE; n++) {
-      const p = planifier(1234, n);
-      for (const g of p.groupes) if (!ENNEMIS[g.type].boss) expect(ENNEMIS[g.type].vague).toBeLessThanOrEqual(n);
-      expect(resume(p).some((r) => r.type === "mere")).toBe(n === 10);
-      expect(resume(p).some((r) => r.type === "compas")).toBe(n === 20);
-    }
+  it("même graine, même vague ; le boss à la fin", () => {
+    const r = { graine: 42, total: 10, pool: ["gribouille", "carre", "avion"] as const, difficulte: 1, entrees: 2, boss: "mere" as const };
+    const regles = { ...r, pool: [...r.pool] };
+    expect(planifier(regles, 4)).toEqual(planifier(regles, 4));
+    expect(resume(planifier(regles, 10)).some((x) => x.type === "mere")).toBe(true);
+    expect(resume(planifier(regles, 9)).some((x) => x.type === "mere")).toBe(false);
+    expect(resume(planifier(regles, 1)).every((x) => x.type === "gribouille")).toBe(true);
   });
 });
 
-describe("la page", () => {
-  it("un mur arrête un gribouille, qui le ronge", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    appliquerTrace(j, trait(TOUR_X - 60, TOUR_Y - 80, TOUR_X + 60, TOUR_Y - 80, 1200));
-    expect(j.murs.length).toBe(1);
-    const e = ajouterEnnemi(j, "gribouille", TOUR_X, TOUR_Y - 140);
-    e.pv = 1e9;
-    j.tour.cd = 1e9;
-    images(j, 3);
-    expect(e.bloque).toBe(true);
-    expect(e.y).toBeLessThan(TOUR_Y - 80);
-    expect(Math.min(...j.murs[0].segs.map((s) => s.pv))).toBeLessThan(j.murs[0].segs[0].pvMax);
+describe("tours", () => {
+  it("dessiner un triangle pose des roquettes ; on améliore, on vend", () => {
+    const j = jeuVide();
+    const r = appliquerTrace(j, symbole("triangle", 120, 300));
+    expect(r.ok).toBe(true);
+    expect(j.tours[0].type).toBe("roquette");
+    const t = j.tours[0];
+    expect(ameliorer(j, t)).toBe(true);
+    expect(ameliorer(j, t)).toBe(true);
+    expect(t.niveau).toBe(3);
+    expect(ameliorer(j, t)).toBe(false);
+    expect(ameliorer(j, t, 2)).toBe(true);
+    expect(t.spec).toBe(2);
+    const encre = j.encre;
+    vendre(j, t);
+    expect(j.tours.length).toBe(0);
+    expect(j.encre).toBeGreaterThan(encre);
   });
-  it("un avion passe par-dessus le mur", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    appliquerTrace(j, trait(TOUR_X - 60, TOUR_Y - 80, TOUR_X + 60, TOUR_Y - 80, 1200));
-    const e = ajouterEnnemi(j, "avion", TOUR_X, TOUR_Y - 140);
-    e.pv = 1e9;
-    images(j, 1.5);
-    expect(e.y).toBeGreaterThan(TOUR_Y - 80);
+  it("on ne pose pas sur un obstacle, ni collé à une autre tour, ni sans encre", () => {
+    const j = jeuVide();
+    expect(poserTour(j, "plume", 200, 200).ok).toBe(true);
+    expect(poserTour(j, "plume", 210, 205).ok).toBe(false);
+    j.encre = 10;
+    expect(poserTour(j, "plume", 100, 400).ok).toBe(false);
   });
-  it("une rature frappe tous ceux qu'elle touche, et seulement eux", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    const a = ajouterEnnemi(j, "carre", 100, 150);
-    const b = ajouterEnnemi(j, "carre", 160, 150);
-    const c = ajouterEnnemi(j, "carre", 300, 150);
-    const r = appliquerTrace(j, trait(80, 150, 200, 150, 100));
-    expect(r.geste).toBe("rature");
-    expect(r.touches).toBe(2);
-    expect(a.pv).toBeLessThan(a.pvMax);
-    expect(b.pv).toBeLessThan(b.pvMax);
-    expect(c.pv).toBe(c.pvMax);
+  it("une plume tue un gribouille qui passe", () => {
+    const j = jeuVide();
+    poserTour(j, "plume", 230, 300);
+    const e = ajouterEnnemi(j, "gribouille", 200, 150);
+    images(j, 8);
+    expect(e.mort).toBe(true);
+    expect(j.vies).toBe(j.viesMax);
   });
-  it("une rature dans le vide coûte quand même", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    const avant = j.encre;
-    const r = appliquerTrace(j, trait(50, 50, 150, 50, 100));
-    expect(r.touches).toBe(0);
-    expect(j.encre).toBeLessThan(avant);
-    expect(j.ratees).toBe(1);
+  it("l'armure du carré ronge les petits coups, pas la Correction", () => {
+    const j = jeuVide();
+    const a = ajouterEnnemi(j, "carre", 100, 100);
+    a.pv = a.pvMax = 1000;
+    poserTour(j, "plume", 100, 160);
+    images(j, 0.6);
+    const parPlume = 1000 - a.pv;
+    expect(parPlume).toBeLessThan(6);
   });
-  it("la colle ralentit, la gomme l'efface", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    j.tour.cd = 1e9;
-    appliquerTrace(j, boucle(TOUR_X, 150, 50, 800));
-    const e = ajouterEnnemi(j, "gribouille", TOUR_X, 150);
-    e.pv = 1e9;
+  it("le fantôme est invisible pour une plume lointaine, pas pour la Correction", () => {
+    const j = jeuVide();
+    const e = ajouterEnnemi(j, "fantome", 100, 300);
+    e.pv = e.pvMax = 1e6;
+    poserTour(j, "plume", 180, 300);
+    images(j, 0.5);
+    expect(e.pv).toBe(1e6);
+    poserTour(j, "correction", 300, 600);
+    images(j, 0.5);
+    expect(e.pv).toBeLessThan(1e6);
+  });
+});
+
+describe("le chemin", () => {
+  it("un mur sur le chemin le fait contourner ou ronger, une rature frappe, la colle ralentit", () => {
+    const j = jeuVide();
+    const entree = j.carte.entrees[0].bord;
+    const avant = j.champ.distance(entree);
+    appliquerTrace(j, trait(60, 300, 340, 300, 1500));
+    images(j, 0.3);
+    expect(j.champ.distance(entree)).toBeGreaterThan(avant);
+    // Une rangée de tours presque d'un bord à l'autre : ils passent par le trou
+    for (let x = 16; x <= 320; x += 30) poserTour(j, "spirale", x, 450);
+    images(j, 0.3);
+    expect(j.trajets[0].some((p) => p.y > 440 && p.y < 460 && p.x > 330)).toBe(true);
+    const e = ajouterEnnemi(j, "carre", 200, 200);
+    const r = appliquerTrace(j, trait(160, 200, 240, 200, 100));
+    expect(r.touches).toBe(1);
+    expect(e.pv).toBeLessThan(e.pvMax);
+    appliquerTrace(j, boucle(100, 500, 60, 900));
+    const g = ajouterEnnemi(j, "gribouille", 100, 500);
     step(j, 1 / 60);
-    expect(e.englue).toBe(true);
-    ajouterEnnemi(j, "gomme", TOUR_X, 140).pv = 1e9;
-    step(j, 1 / 60);
-    step(j, 1 / 60);
-    expect(j.colles.length).toBe(0);
+    expect(g.ralenti).toBeGreaterThan(0);
   });
-  it("le stylo sèche : plus d'encre, pas de mur", () => {
-    const j = nouveauJeu("t");
-    enVague(j);
-    j.encre = 3;
-    const r = appliquerTrace(j, trait(50, 50, 350, 50, 2000));
-    expect(r.ok).toBe(false);
-    expect(j.murs.length).toBe(0);
+  it("enfermés, ils rongent les tours", () => {
+    const j = jeuVide();
+    // Une ligne de tours en travers de la page
+    for (let x = 16; x <= 384; x += 30) poserTour(j, "spirale", x, 300);
+    images(j, 0.3);
+    const e = ajouterEnnemi(j, "gribouille", 200, 200);
+    e.pv = e.pvMax = 1e6;
+    images(j, 15);
+    expect(j.tours.some((t) => t.pv < t.pvMax)).toBe(true);
   });
-  it("sans rien faire, la page est perdue tôt ; la graine rejoue pareil", () => {
+});
+
+describe("une page entière", () => {
+  it("sans rien faire, la page 1-1 est perdue ; la même graine rejoue pareil", () => {
     const jouer = () => {
-      const j = nouveauJeu("passif");
-      for (let i = 0; i < 60 * 60 * 20 && j.phase !== "perdu"; i++) {
-        step(j, 1 / 60);
-        if (j.phase === "choix") choisir(j, j.offres[0]);
-      }
+      const j = nouveauJeu(optionsDePage(PAGES[0], { toursDispo: ["plume"], colle: false }));
+      lancerVague(j);
+      for (let i = 0; i < 60 * 60 * 10 && j.phase === "jeu"; i++) step(j, 1 / 60);
       return j;
     };
     const a = jouer();
     expect(a.phase).toBe("perdu");
-    expect(a.vague).toBeLessThan(10);
-    expect(jouer().tues).toBe(a.tues);
+    expect(jouer().stats.fuites).toBe(a.stats.fuites);
+  });
+  it("la page du jour se génère et se lance", () => {
+    const j = nouveauJeu(optionsPageDuJour("2026-10-24", [...TYPES_TOURS]));
+    lancerVague(j);
+    images(j, 20);
+    expect(j.ennemis.length + j.stats.tues + j.stats.fuites).toBeGreaterThan(0);
+    for (const e of j.ennemis) expect(ENNEMIS[e.type]).toBeDefined();
   });
 });
