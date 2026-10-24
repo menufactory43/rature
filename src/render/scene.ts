@@ -2,12 +2,14 @@
 import type { Carte } from "../sim/carte";
 import { ENNEMIS } from "../sim/ennemis";
 import type { V } from "../sim/geom";
-import { positionLame, stats, type Ennemi, type Jeu, type Tour } from "../sim/jeu";
+import { positionLame, segmentRegle, stats, zoneGomme, type Ennemi, type Jeu, type Tour } from "../sim/jeu";
 import { hash3 } from "../sim/rng";
 import { PORTEE_INFINIE, RAYON_TOUR } from "../sim/tours";
 import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, pointsCercle, rectangle, trait } from "./encre";
 import { dessinerSous, dessinerSur, echelleTour } from "./fx";
 import { monstre } from "./monstres";
+import { frottement, lasso, regle } from "./pouvoirs";
+import type { Pouvoir } from "../sim/pouvoirs";
 import { dessinerTour } from "./tours";
 
 /** Les obstacles et les gribouillis des marges ne bougent pas : on les dessine une fois par carte (sur le papier). */
@@ -278,6 +280,8 @@ export interface Brouillon {
   pts: V[];
   /** Le geste deviné : mur, rature, cercle, tour ou rien. */
   geste: string;
+  /** Le pouvoir armé : le trait le dessine au lieu d'un geste. */
+  pouvoir?: Pouvoir | null;
 }
 
 export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillon | null, selection: Tour | null): void {
@@ -416,6 +420,35 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
     }
   }
   for (const e of j.ennemis) ennemi(ctx, e);
+  // Les voleurs : le cœur arraché se balance au-dessus d'eux, une flèche montre où ils filent
+  for (const e of j.ennemis) {
+    if (e.mort || e.vol <= 0) continue;
+    const b = Math.sin(j.temps * 7 + e.id) * 2;
+    const hx = e.x;
+    const hy = e.y - e.r - 14 + b;
+    trait(ctx, [{ x: e.x, y: e.y - e.r + 2 }, { x: hx, y: hy + 6 }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: e.id });
+    coeur(ctx, hx, hy, 9, Math.max(0, Math.sin(j.temps * 9)), e.id);
+    if (e.vol > 1) ecrire(ctx, "×" + e.vol, hx + 13, hy - 1, { couleur: ROUGE, taille: 15, police: "titre" });
+    // Un petit anneau rouge pour qu'on le repère dans la foule
+    cercle(ctx, e.x, e.y, e.r + 6 + Math.sin(j.temps * 6) * 1.5, { couleur: ROUGE, epaisseur: 1.3, alpha: 0.7, graine: e.id + 9 });
+  }
+  // Les vies reprises qui reviennent en flottant vers le Cœur
+  for (const r of j.rendus) {
+    const dx = j.carte.coeur.x - r.x;
+    const dy = j.carte.coeur.y - r.y;
+    const d = Math.hypot(dx, dy) || 1;
+    for (let k = 1; k <= 4; k++) {
+      ctx.save();
+      ctx.globalAlpha = 0.5 - k * 0.1;
+      ctx.fillStyle = ROUGE;
+      ctx.beginPath();
+      ctx.arc(r.x - (dx / d) * k * 9, r.y - (dy / d) * k * 9 + Math.sin(j.temps * 8 + k) * 1.5, 3.2 - k * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    coeur(ctx, r.x, r.y + Math.sin(j.temps * 6) * 2, 11, Math.max(0, Math.sin(j.temps * 10)), 31);
+    if (r.vies > 1) ecrire(ctx, "+" + r.vies, r.x + 15, r.y - 2, { couleur: ROUGE, taille: 15, police: "titre" });
+  }
   // Les tirs
   for (const s of j.tirs) {
     const n = Math.hypot(s.vx, s.vy) || 1;
@@ -523,11 +556,40 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
         break;
       case "soin":
         break;
+      case "regle": {
+        // Elle tombe d'un coup, reste un instant, puis se relève et disparaît
+        const levee = t < 0.12 ? 1 - t / 0.12 : t > 0.75 ? (t - 0.75) / 0.25 : 0;
+        regle(ctx, f.pts![0], f.pts![1], { levee, alpha: t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1, graine: f.graine });
+        break;
+      }
+      case "lasso":
+        lasso(ctx, f.pts!, t, j.temps, f.graine);
+        break;
+      case "gomme":
+        frottement(ctx, f.x, f.y, f.r ?? 50, t, f.graine);
+        break;
     }
   }
   dessinerSur(ctx);
   // Le trait en cours
-  if (brouillon && brouillon.pts.length > 1) {
+  if (brouillon && brouillon.pouvoir && brouillon.pts.length > 1) {
+    const pts = brouillon.pts;
+    if (brouillon.pouvoir === "regle") {
+      const [a, b] = segmentRegle(pts);
+      regle(ctx, a, b, { fantome: true });
+      trait(ctx, pts, { couleur: CRAYON, epaisseur: 1.6, amp: 0.4, graine: 7, alpha: 0.6 });
+    } else if (brouillon.pouvoir === "lasso") {
+      const a = pts[0];
+      const z = pts[pts.length - 1];
+      const ferme = Math.hypot(z.x - a.x, z.y - a.y) < 40;
+      trait(ctx, pts, { couleur: ROUGE, epaisseur: 2.4, amp: 0.4, graine: 7, fond: ferme ? "rgba(196,48,43,0.1)" : undefined });
+      cercle(ctx, a.x, a.y, 7, { couleur: ROUGE, epaisseur: 1.2, alpha: 0.7, graine: 8 });
+    } else {
+      const z = zoneGomme(pts);
+      cercle(ctx, z.x, z.y, z.r, { couleur: "#c97a86", epaisseur: 1.4, alpha: 0.7, graine: 9 });
+      trait(ctx, pts, { couleur: "#c97a86", epaisseur: 2, amp: 0.4, graine: 7, alpha: 0.6 });
+    }
+  } else if (brouillon && brouillon.pts.length > 1) {
     const couleur = brouillon.geste === "rien" ? CRAYON : BLEU;
     trait(ctx, brouillon.pts, { couleur, epaisseur: brouillon.geste === "mur" ? 3.5 : 2.4, amp: 0.4, graine: 7 });
   }

@@ -5,10 +5,11 @@ import "./style.css";
 import * as audio from "./audio";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
-import { ameliorer, lancerVague, poserTour } from "./sim/jeu";
+import { ameliorer, blesser, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
-import { colleDebloquee, effacer, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
+import { colleDebloquee, effacer, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
+import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
 import { H, W, dessinerAppui, ui } from "./ui/base";
 import { actions, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
@@ -45,15 +46,18 @@ function versPage(e: PointerEvent): { x: number; y: number } {
 
 function jouerPage(p: Page, mode: "campagne" | "defi" | "sansFin"): void {
   const libelle = `${p.id} ${p.nom}${mode === "defi" ? " (défi)" : mode === "sansFin" ? " (sans fin)" : ""}`;
-  demarrerPartie(() => optionsDePage(p, {
-    toursDispo: toursDebloquees(), colle: colleDebloquee(), talents: talentsActifs(),
-    defi: mode === "defi" ? p.defi : undefined, sansFin: mode === "sansFin",
+  demarrerPartie(() => ({
+    ...optionsDePage(p, {
+      toursDispo: toursDebloquees(), colle: colleDebloquee(), talents: talentsActifs(),
+      defi: mode === "defi" ? p.defi : undefined, sansFin: mode === "sansFin",
+    }),
+    pouvoirs: pouvoirsDebloques(),
   }), { page: p, mode, libelle });
 }
 
 function pageDuJour(): void {
   const g = grainePageDuJour();
-  demarrerPartie(() => optionsPageDuJour(g, [...TYPES_TOURS]), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
+  demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS] }), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
 }
 
 actions.jouerPage = jouerPage;
@@ -194,5 +198,5 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
   pageDuJour,
   aller: nav.aller,
   pages: PAGES,
-  sim: { poserTour, ameliorer, lancerVague },
+  sim: { poserTour, ameliorer, lancerVague, blesser, lancerPouvoir },
 };

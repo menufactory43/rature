@@ -1,6 +1,7 @@
 // Cherche, page par page, le multiplicateur de difficulté où le bot « moyen » gagne sans 3 étoiles et où « fort » gagne.
 //   npx vite-node tools/regler.ts [id] [parties]
 import { etoiles } from "../src/sim/jeu";
+import { POUVOIRS, TYPES_POUVOIRS } from "../src/sim/pouvoirs";
 import { PAGES, optionsDePage, type Page } from "../src/sim/pages";
 import type { TypeTour } from "../src/sim/tours";
 import { partie, type Niveau } from "./joueur";
@@ -16,7 +17,9 @@ const avant = (p: Page) => {
 function mesure(p: Page, f: number, niveau: Niveau) {
   let g = 0, e = 0;
   for (let k = 0; k < n; k++) {
-    const j = partie(optionsDePage({ ...p, difficulte: p.difficulte * f }, avant(p)), niveau, 500 + k);
+    const ids = PAGES.slice(0, PAGES.indexOf(p)).map((q) => q.id);
+    const pouvoirs = TYPES_POUVOIRS.filter((k) => ids.includes(POUVOIRS[k].apres));
+    const j = partie({ ...optionsDePage({ ...p, difficulte: p.difficulte * f }, avant(p)), pouvoirs }, niveau, 500 + k);
     if (j.phase === "gagne") g++;
     e += etoiles(j);
   }

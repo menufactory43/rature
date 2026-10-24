@@ -7,6 +7,7 @@ import { ENNEMIS, echellePv, type TypeEnnemi } from "./ennemis";
 import { dist, pointInPolygon, pointSegDist, polylineDist, polylineLength, resample, type V } from "./geom";
 import type { Glyphe } from "./glyphes";
 import { classer, type Geste, type Pt } from "./gestures";
+import { LARGEUR_REGLE, LONGUEUR_REGLE, POUVOIRS, type Pouvoir } from "./pouvoirs";
 import { Rng } from "./rng";
 import { PORTEE_INFINIE, RAYON_TOUR, TOURS, prochainCout, pvTour, statsTour, tourDuGlyphe, type Stats, type TypeTour } from "./tours";
 import { estVagueBoss, planifier, type PlanVague, type ReglesVagues } from "./vagues";
@@ -46,6 +47,8 @@ export interface Options {
   gestes?: { mur: boolean; rature: boolean; colle: boolean };
   talents?: Talents;
   defi?: Defi;
+  /** Les pouvoirs que le joueur a gagnés. */
+  pouvoirs?: Pouvoir[];
 }
 
 // --- L'état ---
@@ -93,6 +96,20 @@ export interface Ennemi {
   mort: boolean;
   ponte: number;
   touche: number;
+  /** L'entrée par où il est arrivé (pour repartir avec son butin). */
+  entree: number;
+  /** Les vies qu'il emporte : s'il meurt en route, elles retournent au Cœur. */
+  vol: number;
+  /** Le chemin du retour vers sa sortie, quand il a volé des vies. */
+  retour: V[] | null;
+  ri: number;
+}
+
+/** Des vies reprises à un voleur, qui flottent jusqu'au Cœur. */
+export interface Rendu {
+  x: number;
+  y: number;
+  vies: number;
 }
 
 export interface SegMur {
@@ -139,7 +156,7 @@ export interface Tir {
   tour: number;
 }
 
-export type TypeEffet = "chiffre" | "texte" | "eclair" | "boom" | "fuite" | "rature" | "casse" | "coche" | "pose" | "detruite" | "soin";
+export type TypeEffet = "chiffre" | "texte" | "eclair" | "boom" | "fuite" | "rature" | "casse" | "coche" | "pose" | "detruite" | "soin" | "regle" | "lasso" | "gomme";
 
 export interface Effet {
   type: TypeEffet;
@@ -179,7 +196,12 @@ export type Evt =
   | { k: "eclair"; pts: V[] }
   | { k: "rature"; pts: V[]; touches: number }
   | { k: "mur"; pts: V[] }
-  | { k: "soin"; x: number; y: number };
+  | { k: "soin"; x: number; y: number }
+  | { k: "repris"; x: number; y: number; vies: number }
+  | { k: "rendu"; vies: number }
+  | { k: "evade"; x: number; y: number; vies: number }
+  | { k: "pouvoir"; p: Pouvoir; x: number; y: number; r: number; pts: V[]; touches: number }
+  | { k: "pret"; p: Pouvoir };
 
 export interface Jeu {
   options: Options;
@@ -214,6 +236,9 @@ export interface Jeu {
   prochainId: number;
   sons: Son[];
   evts: Evt[];
+  rendus: Rendu[];
+  /** Secondes avant que chaque pouvoir soit de nouveau prêt. */
+  recharges: Record<Pouvoir, number>;
 }
 
 export function nouveauJeu(options: Options): Jeu {
@@ -227,7 +252,7 @@ export function nouveauJeu(options: Options): Jeu {
     tours: [], ennemis: [], murs: [], colles: [], zones: [], tirs: [], effets: [], eclats: [],
     temps: 0, champSale: true, dernierCalcul: -1, trajets: [], rng: new Rng(options.regles.graine ^ 0x7f4a7c15),
     stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0 },
-    prochainId: 1, sons: [], evts: [],
+    prochainId: 1, sons: [], evts: [], rendus: [], recharges: { regle: 0, lasso: 0, gomme: 0 },
   };
   recalculer(j);
   return j;
@@ -436,6 +461,84 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
   return { geste: "cercle", ok: true };
 }
 
+// --- Les pouvoirs ---
+
+/** La force d'un pouvoir suit celle des monstres de la vague en cours. */
+const forcePouvoir = (j: Jeu, base: number) => base * j.regles.difficulte * echellePv(Math.max(1, j.vague));
+
+/** La règle va du premier au dernier point du trait, bornée à LONGUEUR_REGLE autour de son milieu. */
+export function segmentRegle(trace: V[]): [V, V] {
+  const a = trace[0];
+  const b = trace[trace.length - 1];
+  const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const demi = Math.min(l, LONGUEUR_REGLE) / 2;
+  return [{ x: m.x - ((b.x - a.x) / l) * demi, y: m.y - ((b.y - a.y) / l) * demi }, { x: m.x + ((b.x - a.x) / l) * demi, y: m.y + ((b.y - a.y) / l) * demi }];
+}
+
+/** La zone frottée par la gomme : le centre du griffonnage et son étendue. */
+export function zoneGomme(trace: V[]): { x: number; y: number; r: number } {
+  const x = trace.reduce((s, p) => s + p.x, 0) / trace.length;
+  const y = trace.reduce((s, p) => s + p.y, 0) / trace.length;
+  const moy = trace.reduce((s, p) => s + Math.hypot(p.x - x, p.y - y), 0) / trace.length;
+  return { x, y, r: Math.max(36, Math.min(70, moy * 1.5 + 12)) };
+}
+
+export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
+  const fin = trace[trace.length - 1];
+  const res = (ok: boolean, raison?: string, touches?: number): Resultat => ({ geste: "rien", ok, raison, touches });
+  if (j.phase !== "jeu" && j.phase !== "attente") return res(false);
+  if (!j.options.pouvoirs?.includes(p)) return refuser(j, fin.x, fin.y, res(false, "pas encore gagné"));
+  if (j.recharges[p] > 0) return refuser(j, fin.x, fin.y, res(false, `prêt dans ${Math.ceil(j.recharges[p])} s`));
+  const l = polylineLength(trace);
+  let touches = 0;
+  if (p === "regle") {
+    const [a, b] = segmentRegle(trace);
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 50) return refuser(j, fin.x, fin.y, res(false, "trop court"));
+    const d = forcePouvoir(j, 45);
+    for (const e of j.ennemis) {
+      if (e.mort || pointSegDist(e, a, b) > LARGEUR_REGLE + e.r) continue;
+      blesser(j, e, d, { chiffre: true, ignoreArmure: true });
+      e.etourdi = Math.max(e.etourdi, ENNEMIS[e.type].boss ? 0.8 : 2);
+      touches++;
+    }
+    effet(j, "regle", (a.x + b.x) / 2, (a.y + b.y) / 2, 1.1, { pts: [a, b] });
+    j.evts.push({ k: "pouvoir", p, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: 0, pts: [a, b], touches });
+    j.sons.push("boom");
+  } else if (p === "lasso") {
+    const a = trace[0];
+    if (l < 80 || Math.hypot(fin.x - a.x, fin.y - a.y) > Math.max(40, l * 0.3)) return refuser(j, fin.x, fin.y, res(false, "ferme la boucle"));
+    const poly = resample(trace, 8);
+    const duree = 4.5;
+    for (const e of j.ennemis) {
+      if (e.mort || !pointInPolygon(e, poly)) continue;
+      e.etourdi = Math.max(e.etourdi, ENNEMIS[e.type].boss ? 1.5 : duree);
+      e.marque = Math.max(e.marque, duree + 1);
+      touches++;
+    }
+    const cx = poly.reduce((s, q) => s + q.x, 0) / poly.length;
+    const cy = poly.reduce((s, q) => s + q.y, 0) / poly.length;
+    effet(j, "lasso", cx, cy, duree, { pts: poly });
+    j.evts.push({ k: "pouvoir", p, x: cx, y: cy, r: 0, pts: poly, touches });
+    j.sons.push("colle");
+  } else {
+    if (l < 60) return refuser(j, fin.x, fin.y, res(false, "frotte plus"));
+    const z = zoneGomme(trace);
+    const d = forcePouvoir(j, 110);
+    for (const e of j.ennemis) {
+      if (e.mort || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.r * 0.5) continue;
+      e.bouclier = 0;
+      blesser(j, e, d, { chiffre: true, ignoreArmure: true });
+      touches++;
+    }
+    effet(j, "gomme", z.x, z.y, 0.9, { r: z.r });
+    j.evts.push({ k: "pouvoir", p, x: z.x, y: z.y, r: z.r, pts: [], touches });
+    j.sons.push("rature");
+  }
+  j.recharges[p] = POUVOIRS[p].recharge;
+  return res(true, undefined, touches);
+}
+
 // --- Le champ de flux ---
 
 function remplirSurcout(s: Float32Array, murs: { segs: SegMur[] }[], tours: V[]): void {
@@ -492,7 +595,8 @@ export function ajouterEnnemi(j: Jeu, type: TypeEnnemi, x: number, y: number, va
   const e: Ennemi = {
     id: j.prochainId++, type, x, y, vx: 0, vy: 0, pv, pvMax: pv, bouclier: (f.bouclier ?? 0) * j.regles.difficulte * echellePv(Math.max(1, vague)), r: f.rayon,
     age: 0, zig: (j.prochainId * 1.7) % 6.28, bloque: false, englue: 0, etourdi: 0, marque: 0, revele: 0, acide: 0, ralenti: 0,
-    mort: false, ponte: 2, touche: 0,
+    mort: false, ponte: 2, touche: 0, vol: 0, retour: null, ri: 0,
+    entree: j.carte.entrees.reduce((b, en, i) => (Math.hypot(en.depart.x - x, en.depart.y - y) < Math.hypot(j.carte.entrees[b].depart.x - x, j.carte.entrees[b].depart.y - y) ? i : b), 0),
   };
   j.ennemis.push(e);
   return e;
@@ -539,6 +643,13 @@ function tuer(j: Jeu, e: Ennemi): void {
     }
   }
   j.encre += prime;
+  if (e.vol > 0) {
+    j.rendus.push({ x: e.x, y: e.y, vies: e.vol });
+    effet(j, "texte", e.x, e.y - 20, 1.2, { texte: `${e.vol} ${e.vol > 1 ? "vies reprises" : "vie reprise"} !` });
+    j.evts.push({ k: "repris", x: e.x, y: e.y, vies: e.vol });
+    j.sons.push("ding");
+    e.vol = 0;
+  }
   j.evts.push({ k: "mort", type: e.type, x: e.x, y: e.y, r: e.r, id: e.id, angle: Math.atan2(e.vy, e.vx), prime });
   j.eclats.push({ x: e.x, y: e.y, r: e.r * 1.4, graine: e.id });
   if (j.eclats.length > 160) j.eclats.shift();
@@ -619,17 +730,49 @@ export function step(j: Jeu, dt: number): void {
     j.tours = j.tours.filter((t) => t.pv > 0);
     j.champSale = true;
   }
-  if (j.vies <= 0) {
+  // Les vies reprises flottent jusqu'au Cœur
+  for (const r of j.rendus) {
+    const dx = j.carte.coeur.x - r.x;
+    const dy = j.carte.coeur.y - r.y;
+    const d = Math.hypot(dx, dy);
+    const pas = Math.min(d, 110 * dt);
+    if (d > 0) {
+      r.x += (dx / d) * pas;
+      r.y += (dy / d) * pas;
+    }
+    if (d < 8) {
+      j.vies = Math.min(j.viesMax, j.vies + r.vies);
+      j.stats.fuites = Math.max(0, j.stats.fuites - r.vies);
+      effet(j, "fuite", j.carte.coeur.x, j.carte.coeur.y, 0.8, { texte: "+" + r.vies });
+      j.evts.push({ k: "rendu", vies: r.vies });
+      j.sons.push("ding");
+      r.vies = 0;
+    }
+  }
+  j.rendus = j.rendus.filter((r) => r.vies > 0);
+  // Le Cœur vide n'est perdu que lorsque plus personne n'emporte ni ne rapporte de vies : on peut encore rattraper le dernier voleur
+  if (j.vies <= 0 && !j.rendus.length && !j.ennemis.some((e) => e.vol > 0)) {
     j.vies = 0;
     j.phase = "perdu";
     j.sons.push("page");
     return;
+  }
+  for (const k of Object.keys(j.recharges) as Pouvoir[]) {
+    if (j.recharges[k] <= 0) continue;
+    j.recharges[k] -= dt;
+    if (j.recharges[k] <= 0) {
+      j.recharges[k] = 0;
+      if (j.options.pouvoirs?.includes(k)) j.evts.push({ k: "pret", p: k });
+    }
   }
   // La suite des vagues
   const derniere = Number.isFinite(j.regles.total) && j.vague >= j.regles.total;
   if (!j.file.length) {
     if (derniere) {
       if (!j.ennemis.length) {
+        // Ce qui flottait encore vers le Cœur arrive
+        for (const r of j.rendus) j.vies = Math.min(j.viesMax, j.vies + r.vies);
+        j.rendus = [];
         j.phase = "gagne";
         j.sons.push("page");
       }
@@ -645,13 +788,13 @@ export function step(j: Jeu, dt: number): void {
 
 function bougerEnnemis(j: Jeu, dt: number): void {
   const vivants = j.ennemis;
-  // Ils se poussent un peu, pour ne pas s'empiler
+  // Ils se poussent un peu, pour ne pas s'empiler ; les voleurs qui repartent remontent le flot sans bousculade
   for (let a = 0; a < vivants.length; a++) {
     const e = vivants[a];
     if (ENNEMIS[e.type].vole) continue;
     for (let b = a + 1; b < vivants.length; b++) {
       const o = vivants[b];
-      if (ENNEMIS[o.type].vole) continue;
+      if (ENNEMIS[o.type].vole || !o.retour !== !e.retour) continue;
       const dx = o.x - e.x;
       const dy = o.y - e.y;
       const min = e.r + o.r;
@@ -719,6 +862,28 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     e.ralenti = lent;
     if (e.etourdi > 0 || e.englue > 0) continue;
     const vitesse = f.vitesse * (1 - lent);
+    if (e.retour) {
+      // Le voleur rentre chez lui par où il est venu, sans plus se soucier des murs
+      const cible = e.ri < e.retour.length ? e.retour[e.ri] : j.carte.entrees[e.entree].depart;
+      const dx = cible.x - e.x;
+      const dy = cible.y - e.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 6 && e.ri < e.retour.length) e.ri++;
+      const pas = Math.min(d, vitesse * 1.1 * dt);
+      if (d > 0) {
+        e.vx = dx / d;
+        e.vy = dy / d;
+        e.x += e.vx * pas;
+        e.y += e.vy * pas;
+      }
+      if (e.ri >= e.retour.length && d < 4) {
+        e.mort = true;
+        effet(j, "texte", Math.max(30, Math.min(370, e.x)), Math.max(20, Math.min(700, e.y)), 1.4, { texte: `${e.vol} ${e.vol > 1 ? "vies perdues" : "vie perdue"}` });
+        j.evts.push({ k: "evade", x: e.x, y: e.y, vies: e.vol });
+        e.vol = 0;
+      }
+      continue;
+    }
 
     // La direction : le champ de flux, tout droit pour les volants, la tour la plus proche pour les chasseurs
     let dir: V;
@@ -775,12 +940,29 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     e.x = nx;
     e.y = ny;
     if (Math.hypot(e.x - coeur.x, e.y - coeur.y) < 14 + e.r) {
-      j.vies -= f.vies;
-      j.stats.fuites += f.vies;
-      e.mort = true;
-      effet(j, "fuite", coeur.x, coeur.y, 0.8, { texte: "-" + f.vies });
-      j.evts.push({ k: "fuite", x: e.x, y: e.y, vies: f.vies, type: e.type });
+      // Il arrache des vies au Cœur et repart avec : on peut encore les reprendre en le raturant sur le chemin du retour
+      const vol = Math.min(f.vies, j.vies);
+      j.vies -= vol;
+      j.stats.fuites += vol;
+      effet(j, "fuite", coeur.x, coeur.y, 0.8, { texte: "-" + vol });
+      j.evts.push({ k: "fuite", x: e.x, y: e.y, vies: vol, type: e.type });
       j.sons.push("aie");
+      if (vol > 0 && !f.vole) {
+        e.vol = vol;
+        // Il remonte à côté du chemin, pour ne pas se perdre dans la horde qui descend
+        const t = [...(j.trajets[e.entree] ?? [])].reverse();
+        e.retour = t.map((p, i) => {
+          const a = t[Math.max(0, i - 1)];
+          const b = t[Math.min(t.length - 1, i + 1)];
+          const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+          return { x: p.x - ((b.y - a.y) / n) * 16, y: p.y + ((b.x - a.x) / n) * 16 };
+        });
+        e.ri = 0;
+      } else if (vol > 0) {
+        e.vol = vol;
+        e.retour = [j.carte.entrees[e.entree].depart];
+        e.ri = 0;
+      } else e.mort = true;
     }
   }
 }

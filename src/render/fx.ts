@@ -64,6 +64,7 @@ const fx = {
   flashCouleur: ROUGE,
   naissances: new Map<number, number>(),
   ameliorations: new Map<number, number>(),
+  prets: new Map<string, number>(),
   pulseEncre: 0,
   temps: 0,
   dx: 0,
@@ -102,7 +103,14 @@ export function ajouterTrace(pts: V[], cible: V | null, couleur: string): void {
   fx.traces.push({ pts: pts.map((p) => ({ x: p.x, y: p.y })), cible, couleur, age: 0, vie: cible ? 0.28 : 0.4 });
 }
 
+/** Secondes depuis qu'un pouvoir est redevenu prêt (pour faire sursauter son bouton). */
+export function pretDepuis(p: string): number {
+  const t = fx.prets.get(p);
+  return t === undefined ? 99 : fx.temps - t;
+}
+
 export function remettreAZero(): void {
+  fx.prets.clear();
   fx.traces = [];
   fx.particules = [];
   fx.cadavres = [];
@@ -222,6 +230,45 @@ export function absorber(j: Jeu, dt: number): void {
         break;
       }
       case "soin":
+        break;
+      case "repris":
+        vibrer("moyen");
+        secouer(4);
+        ajouter("anneau", e.x, e.y, { vie: 0.5, r: 34, couleur: ROUGE });
+        for (let k = 0; k < 6; k++) ajouter("plus", e.x + hasard(-12, 12), e.y + hasard(-8, 8), { vx: hasard(-20, 20), vy: hasard(-70, -40), vie: hasard(0.6, 0.9), r: hasard(3, 5), couleur: ROUGE });
+        if (j.vies <= 0) banniere("Rattrapé !", `${e.vies} ${e.vies > 1 ? "vies reprises" : "vie reprise"}`, true, 1.6);
+        break;
+      case "rendu":
+        vibrer("leger");
+        ajouter("anneau", j.carte.coeur.x, j.carte.coeur.y, { vie: 0.5, r: 30, couleur: ROUGE });
+        break;
+      case "pouvoir":
+        if (e.p === "regle") {
+          vibrer("fort");
+          secouer(9);
+          const [a, b] = e.pts;
+          for (let k = 0; k < 14; k++) {
+            const u = k / 13;
+            ajouter("fumee", a.x + (b.x - a.x) * u + hasard(-6, 6), a.y + (b.y - a.y) * u + hasard(-6, 6), { vx: hasard(-30, 30), vy: hasard(-30, 30), vie: hasard(0.4, 0.8), r: hasard(4, 8), couleur: CRAYON });
+          }
+        } else if (e.p === "lasso") {
+          vibrer("moyen");
+          ajouter("anneau", e.x, e.y, { vie: 0.4, r: 30, couleur: ROUGE });
+        } else {
+          vibrer("moyen");
+          secouer(4);
+          // Les miettes de gomme
+          for (let k = 0; k < 22; k++) ajouter("papier", e.x + hasard(-e.r, e.r) * 0.7, e.y + hasard(-e.r, e.r) * 0.7, { vx: hasard(-90, 90), vy: hasard(-90, 90), vie: hasard(0.6, 1.1), r: hasard(1.5, 3), vr: hasard(-10, 10), couleur: k % 3 ? "#e9a3ad" : "#8fb0dd", age: -hasard(0, 0.5) });
+        }
+        if (e.touches >= 6) banniere("Carton !", `${e.touches} touchés`, true, 1.2);
+        break;
+      case "pret":
+        vibrer("leger");
+        fx.prets.set(e.p, fx.temps);
+        break;
+      case "evade":
+        vibrer("moyen");
+        gicler(e.x, e.y, 8, ROUGE, 120, 2);
         break;
     }
   }

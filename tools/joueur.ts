@@ -6,8 +6,10 @@ import { ENNEMIS } from "../src/sim/ennemis";
 import type { V } from "../src/sim/geom";
 import type { Pt } from "../src/sim/gestures";
 import {
-  ameliorer, appliquerTrace, coutAmelioration, coutPose, coutRature, lancerVague, nouveauJeu, poserTour, refusPose, step, type Jeu, type Options,
+  ameliorer, appliquerTrace, coutAmelioration, coutPose, coutRature, lancerPouvoir, lancerVague, nouveauJeu, poserTour, refusPose, step, type Jeu, type Options,
 } from "../src/sim/jeu";
+import { pointSegDist } from "../src/sim/geom";
+import { LARGEUR_REGLE } from "../src/sim/pouvoirs";
 import { Rng } from "../src/sim/rng";
 import { PORTEE_INFINIE, statsTour, type TypeTour } from "../src/sim/tours";
 
@@ -92,6 +94,50 @@ function agir(j: Jeu, niveau: Niveau, rng: Rng): boolean {
   return poserTour(j, voulu, p.x, p.y).ok;
 }
 
+/** Les pouvoirs : lancés là où ils prennent le plus de monde (le moyen attend un plus gros paquet). */
+function pouvoirs(j: Jeu, niveau: Niveau): void {
+  const v = j.ennemis.filter((e) => !e.mort && e.x > 10 && e.y > 10 && e.x < 390 && e.y < 710);
+  if (v.length < 3) return;
+  const seuil = niveau === "fort" ? 4 : 6;
+  const poids = (e: (typeof v)[number]) => (ENNEMIS[e.type].boss ? 4 : 1);
+  const pret = (k: "regle" | "lasso" | "gomme") => j.options.pouvoirs?.includes(k) && j.recharges[k] <= 0;
+  if (pret("regle")) {
+    let best: [V, V] | null = null;
+    let bs = 0;
+    for (const c of v) for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI;
+      const p1 = { x: c.x - Math.cos(a) * 150, y: c.y - Math.sin(a) * 150 };
+      const p2 = { x: c.x + Math.cos(a) * 150, y: c.y + Math.sin(a) * 150 };
+      const n = v.reduce((s, e) => s + (pointSegDist(e, p1, p2) < LARGEUR_REGLE + e.r ? poids(e) : 0), 0);
+      if (n > bs) {
+        bs = n;
+        best = [p1, p2];
+      }
+    }
+    if (best && bs >= seuil) lancerPouvoir(j, "regle", [{ ...best[0], t: 0 }, { ...best[1], t: 200 }]);
+  }
+  const paquet = (r: number) => {
+    let best = v[0];
+    let bs = 0;
+    for (const c of v) {
+      const n = v.reduce((s, e) => s + (Math.hypot(e.x - c.x, e.y - c.y) < r ? poids(e) : 0), 0);
+      if (n > bs) {
+        bs = n;
+        best = c;
+      }
+    }
+    return { c: best, n: bs };
+  };
+  if (pret("gomme")) {
+    const { c, n } = paquet(50);
+    if (n >= seuil) lancerPouvoir(j, "gomme", Array.from({ length: 30 }, (_, i) => ({ x: c.x + Math.sin(i * 1.3) * 34, y: c.y + Math.cos(i * 0.7) * 30, t: i * 12 })));
+  }
+  if (pret("lasso")) {
+    const { c, n } = paquet(55);
+    if (n >= seuil) lancerPouvoir(j, "lasso", Array.from({ length: 41 }, (_, i) => ({ x: c.x + Math.cos((i / 40) * Math.PI * 2) * 60, y: c.y + Math.sin((i / 40) * Math.PI * 2) * 60, t: i * 10 })));
+  }
+}
+
 export function partie(options: Options, niveau: Niveau, graine: number): Jeu {
   const j = nouveauJeu(options);
   const rng = new Rng(graine);
@@ -104,6 +150,7 @@ export function partie(options: Options, niveau: Niveau, graine: number): Jeu {
     attente -= 1 / 60;
     if (niveau !== "passif" && attente <= 0) {
       agir(j, niveau, rng);
+      pouvoirs(j, niveau);
       attente = delai;
     }
   }

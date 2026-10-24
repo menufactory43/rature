@@ -3,6 +3,7 @@ import type { V } from "./sim/geom";
 import { TALENTS_NEUTRES, type Talents } from "./sim/jeu";
 import { PAGES, type Page } from "./sim/pages";
 import type { TypeTour } from "./sim/tours";
+import { TYPES_POUVOIRS, POUVOIRS, type Pouvoir } from "./sim/pouvoirs";
 
 export type IdTalent = "encre" | "regen" | "murs" | "ratures" | "colle" | "rabais" | "vies" | "primes";
 
@@ -81,6 +82,8 @@ export function toursDebloquees(): TypeTour[] {
   for (const p of PAGES) if (pageGagnee(p.id) && p.debloque && p.debloque !== "colle") t.push(p.debloque);
   return t;
 }
+
+export const pouvoirsDebloques = (): Pouvoir[] => TYPES_POUVOIRS.filter((k) => pageGagnee(POUVOIRS[k].apres));
 
 export const colleDebloquee = () => PAGES.some((p) => p.debloque === "colle" && pageGagnee(p.id));
 

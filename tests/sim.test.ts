@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classer, type Pt } from "../src/sim/gestures";
 import { FORMES, type Glyphe } from "../src/sim/glyphes";
 import { genererCarte, lireCarte, toutesReliees } from "../src/sim/carte";
-import { ajouterEnnemi, ameliorer, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
+import { ajouterEnnemi, ameliorer, blesser, lancerPouvoir, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
 import { ENNEMIS } from "../src/sim/ennemis";
 import { planifier, resume } from "../src/sim/vagues";
 import { PAGES, optionsDePage, optionsPageDuJour } from "../src/sim/pages";
@@ -170,6 +170,73 @@ describe("le chemin", () => {
     e.pv = e.pvMax = 1e6;
     images(j, 15);
     expect(j.tours.some((t) => t.pv < t.pvMax)).toBe(true);
+  });
+});
+
+describe("la seconde chance", () => {
+  it("le voleur emporte des vies ; raturé sur le retour, il les rend", () => {
+    const j = jeuVide();
+    const { x, y } = j.carte.coeur;
+    const e = ajouterEnnemi(j, "gribouille", x, y - 30);
+    const avant = j.vies;
+    for (let i = 0; i < 600 && !e.vol; i++) step(j, 1 / 60);
+    expect(e.vol).toBeGreaterThan(0);
+    expect(j.vies).toBe(avant - e.vol);
+    images(j, 0.5);
+    blesser(j, e, 1e6);
+    images(j, 10);
+    expect(j.vies).toBe(avant);
+  });
+  it("s'il ressort de la page, les vies sont perdues", () => {
+    const j = jeuVide();
+    const { x, y } = j.carte.coeur;
+    const e = ajouterEnnemi(j, "gribouille", x, y - 30);
+    const avant = j.vies;
+    images(j, 60);
+    expect(e.mort).toBe(true);
+    expect(j.vies).toBeLessThan(avant);
+  });
+});
+
+describe("les pouvoirs", () => {
+  const avec = () => {
+    const j = jeuVide();
+    j.options.pouvoirs = ["regle", "lasso", "gomme"];
+    return j;
+  };
+  it("la règle frappe et assomme ce qui est dessous, puis recharge", () => {
+    const j = avec();
+    const e = ajouterEnnemi(j, "gribouille", 200, 300);
+    const loin = ajouterEnnemi(j, "gribouille", 200, 500);
+    const r = lancerPouvoir(j, "regle", trait(100, 300, 300, 300, 200));
+    expect(r.ok).toBe(true);
+    expect(e.mort || e.pv < e.pvMax).toBe(true);
+    expect(loin.pv).toBe(loin.pvMax);
+    expect(lancerPouvoir(j, "regle", trait(100, 300, 300, 300, 200)).ok).toBe(false);
+    images(j, 36);
+    expect(j.recharges.regle).toBe(0);
+  });
+  it("le lasso immobilise ceux qu'il entoure", () => {
+    const j = avec();
+    const e = ajouterEnnemi(j, "carre", 200, 300);
+    expect(lancerPouvoir(j, "lasso", boucle(200, 300, 50, 400)).ok).toBe(true);
+    const y = e.y;
+    images(j, 2);
+    expect(e.y).toBeCloseTo(y, 0);
+    // Une boucle ouverte ne prend personne
+    const k = avec();
+    expect(lancerPouvoir(k, "lasso", trait(100, 300, 300, 300, 400)).ok).toBe(false);
+  });
+  it("la gomme efface ce qu'on frotte, bouclier compris", () => {
+    const j = avec();
+    const e = ajouterEnnemi(j, "gribouille", 200, 300);
+    const frotte = [...trait(170, 300, 230, 300, 100), ...trait(230, 305, 170, 305, 100).map((q) => ({ ...q, t: q.t + 100 }))];
+    expect(lancerPouvoir(j, "gomme", frotte).ok).toBe(true);
+    expect(e.mort).toBe(true);
+  });
+  it("sans l'avoir gagné, rien", () => {
+    const j = jeuVide();
+    expect(lancerPouvoir(j, "regle", trait(100, 300, 300, 300, 200)).ok).toBe(false);
   });
 });
 

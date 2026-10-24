@@ -7,12 +7,14 @@ import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
 import { symbole } from "../render/tours";
+import { icone } from "../render/pouvoirs";
+import { POUVOIRS, type Pouvoir } from "../sim/pouvoirs";
 import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
 import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  gestesPermis, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
@@ -45,6 +47,8 @@ interface Partie {
   fond: HTMLCanvasElement | null;
   echelleFond: number;
   reste: number;
+  /** Le pouvoir armé : le prochain trait le lance. */
+  arme: Pouvoir | null;
 }
 
 export let partie: Partie | null = null;
@@ -55,7 +59,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, reste: 0,
+    fond: null, echelleFond: 0, reste: 0, arme: null,
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -174,7 +178,8 @@ export function glisserPartie(e: PointerEvent, versPage: (ev: PointerEvent) => {
     const dernier = p.trace[p.trace.length - 1];
     if (Math.hypot(pt.x - dernier.x, pt.y - dernier.y) < 2) continue;
     p.trace.push(pt);
-    const possible = longueurPossible(p.jeu);
+    // Les pouvoirs ne coûtent pas d'encre
+    const possible = p.arme ? 1500 : longueurPossible(p.jeu);
     if (polylineLength(p.trace) > possible) {
       const avant: Pt[] = p.trace;
       p.trace = truncate(avant, possible).map((q2, i) => ({ ...q2, t: avant[Math.min(i, avant.length - 1)].t }));
@@ -202,6 +207,11 @@ export function leverPartie(e: PointerEvent): void {
   const duree = trace[trace.length - 1].t - trace[0].t;
   // Un simple toucher : choisir une tour (ou fermer son menu)
   if (l < 10 && duree < 400) {
+    // Toucher la page désarme le pouvoir
+    if (p.arme) {
+      p.arme = null;
+      return;
+    }
     const q = trace[0];
     let best: Tour | null = null;
     let bd = 22;
@@ -213,6 +223,17 @@ export function leverPartie(e: PointerEvent): void {
       }
     }
     p.selection = best && best !== p.selection ? best : null;
+    return;
+  }
+  if (p.arme) {
+    const rp = lancerPouvoir(j, p.arme, trace);
+    if (rp.ok) {
+      p.arme = null;
+      p.selection = null;
+    } else {
+      vibrer("refus");
+      fx.ajouterTrace(trace, null, CRAYON);
+    }
     return;
   }
   const r = appliquerTrace(j, trace);
@@ -254,10 +275,11 @@ export function dessinerPartie(echelle: number): void {
   const sec = fx.secousse();
   ctx.translate(sec.x, HAUT + sec.y);
   let brouillon: Brouillon | null = null;
-  if (p.trace) brouillon = { pts: p.trace, geste: classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]).geste };
+  if (p.trace && p.arme) brouillon = { pts: p.trace, geste: "rien", pouvoir: p.arme };
+  else if (p.trace) brouillon = { pts: p.trace, geste: classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]).geste };
   scene(ctx, j, brouillon, p.selection);
-  if (p.trace && p.trace.length > 3) apercu(p);
-  if (brouillon && p.trace && p.trace.length > 3) {
+  if (p.trace && p.trace.length > 3 && !p.arme) apercu(p);
+  if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
     const b = p.trace[p.trace.length - 1];
     const c = classer([...p.trace, { ...b, t: performance.now() }]);
     const nom = p.sec ? "plus d'encre" : c.geste === "cercle" ? "colle" : c.geste === "tour" ? TOURS[tourDe(c.glyphe!)].nom : c.geste === "rien" ? "" : c.geste;
@@ -265,7 +287,7 @@ export function dessinerPartie(echelle: number): void {
   }
   ctx.restore();
   if (j.phase === "attente") carteAttente(p);
-  const conseil = astuce(p);
+  const conseil = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : astuce(p);
   if (conseil && !p.trace) {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
     ctx.fillStyle = "rgba(246,239,220,0.85)";
@@ -288,6 +310,7 @@ function astuce(p: Partie): string | null {
   const j = p.jeu;
   const id = p.page?.id;
   if (p.mode !== "campagne" || p.fiches.length || p.selection || (sauvegarde.etoiles[id ?? ""] ?? 0) > 0) return null;
+  if (j.ennemis.some((e) => !e.mort && e.vol > 0)) return "Un voleur repart avec tes vies : rature-le avant qu'il sorte de la page, et elles reviennent !";
   if (id === "1-1") {
     if (!j.tours.length) return "Dessine un PETIT cercle à côté du chemin pointillé : une Plume.";
     if (j.phase === "attente") return "Une tour de plus si tu peux, puis « Go ! ». Touche une tour pour l'améliorer.";
@@ -300,6 +323,11 @@ function astuce(p: Partie): string | null {
   if (id === "1-3" && present("avion")) return "Les avions volent par-dessus les murs. Les ratures les arrêtent.";
   if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
   if (id === "1-4" && present("tache")) return "Les taches rongent les murs, et se divisent en mourant.";
+  // Les pouvoirs, la première fois qu'on les a
+  const nouveau = (k: Pouvoir, page: string) => id === page && j.vague >= 2 && j.recharges[k] <= 0 && j.options.pouvoirs?.includes(k);
+  if (nouveau("regle", "1-2")) return "Nouveau : la règle, en bas à droite. Touche-la, puis trace une ligne sur la horde.";
+  if (nouveau("lasso", "1-4")) return "Nouveau : le lasso. Arme-le, puis entoure un paquet de monstres.";
+  if (nouveau("gomme", "2-3")) return "Nouveau : la gomme. Arme-la, puis frotte là où ça grouille.";
   return null;
 }
 
@@ -450,19 +478,21 @@ function bandeauBas(p: Partie): void {
   ctx.fill();
   const pulse = fx.pulseEncre();
   ecrire(ctx, String(Math.floor(j.encre)), 34, y0 + 21, { align: "left", police: "titre", taille: 30 * (1 + pulse * 0.18), couleur: pulse > 0.5 ? "#3a5fc4" : BLEU });
-  if (p.trace && p.trace.length > 1) {
+  if (p.trace && p.trace.length > 1 && !p.arme) {
     const l = polylineLength(p.trace);
     const c = classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]);
     const cout = c.geste === "tour" ? coutPose(j, tourDe(c.glyphe!)) : c.geste === "rature" ? coutRature(l) : c.geste === "cercle" ? l * ENCRE_PAR_PX_COLLE : c.geste === "mur" ? l * ENCRE_PAR_PX_MUR : 0;
     if (cout) ecrire(ctx, `−${Math.ceil(cout)}`, 100, y0 + 22, { align: "left", taille: 20, couleur: cout > j.encre ? ROUGE : CRAYON });
   }
-  // Les gestes permis
+  // Les pouvoirs, à droite ; les gestes permis, tant qu'il reste de la place
+  const pouvoirs = j.options.pouvoirs ?? [];
+  pouvoirs.forEach((k, i) => boutonPouvoir(p, k, W - 30 - (pouvoirs.length - 1 - i) * 50, y0 + 20));
   const g = gestesPermis(j);
   const gestes = [
     g.mur && ["mur", "lent"],
     g.rature && ["rature", "sec"],
     g.colle && j.options.gestes?.colle !== false && ["colle", "boucle"],
-  ].filter(Boolean) as string[][];
+  ].filter(Boolean).slice(0, pouvoirs.length >= 2 ? 0 : pouvoirs.length ? 2 : 3) as string[][];
   gestes.forEach(([nom, comment], i) => {
     const x = 170 + i * 76;
     ecrire(ctx, nom, x, y0 + 15, { taille: 14 });
@@ -479,6 +509,58 @@ function bandeauBas(p: Partie): void {
     symbole(ctx, TOURS[t].glyphe, x, y - 6, 9, possible ? BLEU : CRAYON, 1.8);
     ecrire(ctx, String(cout), x, y + 16, { taille: 12, couleur: possible ? BLEU : CRAYON });
     zone(x - largeur / 2, y - 22, largeur, 46, () => (p.fiches = [t]));
+  });
+}
+
+/** Un pouvoir dans le bandeau : son icône, sa recharge hachurée qui recule, et un sursaut quand il revient. */
+function boutonPouvoir(p: Partie, k: Pouvoir, x: number, y: number): void {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const reste = j.recharges[k];
+  const pret = reste <= 0;
+  const arme = p.arme === k;
+  const sursaut = fx.pretDepuis(k);
+  const s = 1 + (sursaut < 0.4 ? Math.sin((sursaut / 0.4) * Math.PI) * 0.25 : 0) + (arme ? Math.sin(ui.temps * 8) * 0.05 : 0);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  cercle(ctx, 0, 0, 20, { couleur: arme ? ROUGE : pret ? BLEU : CRAYON, epaisseur: arme ? 2.6 : 1.6, graine: 60 + x, fond: arme ? "rgba(196,48,43,0.12)" : "rgba(246,239,220,0.9)" });
+  icone(ctx, k, 0, 0, 12, pret);
+  if (!pret) {
+    // Ce qui reste à recharger, hachuré au crayon
+    const part = Math.min(1, reste / POUVOIRS[k].recharge);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 19, -Math.PI / 2, -Math.PI / 2 + part * Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.strokeStyle = "rgba(90,92,105,0.55)";
+    ctx.lineWidth = 1.2;
+    for (let d = -24; d < 24; d += 4) {
+      ctx.beginPath();
+      ctx.moveTo(d - 20, -20);
+      ctx.lineTo(d + 20, 20);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Les secondes restantes, sur une pastille de papier au coin
+    ctx.fillStyle = PAPIER;
+    ctx.beginPath();
+    ctx.ellipse(14, 13, 12, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    cercle(ctx, 14, 13, 10, { couleur: CRAYON, epaisseur: 1, graine: 70 + x, amp: 0.3 });
+    ecrire(ctx, String(Math.ceil(reste)), 14, 14, { couleur: "#3d3f4a", taille: 13, police: "titre" });
+  }
+  ctx.restore();
+  zone(x - 24, y - 22, 48, 44, () => {
+    if (!pret) {
+      vibrer("refus");
+      return;
+    }
+    p.arme = arme ? null : k;
+    p.selection = null;
+    if (p.arme) vibrer("leger");
   });
 }
 

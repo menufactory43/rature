@@ -2,6 +2,7 @@
 //   npm run bot                 toutes les pages, 5 parties par niveau
 //   npm run bot -- 1-3 10       une page, 10 parties
 import { etoiles, type Options } from "../src/sim/jeu";
+import { POUVOIRS, TYPES_POUVOIRS } from "../src/sim/pouvoirs";
 import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "../src/sim/pages";
 import { TYPES_TOURS, type TypeTour } from "../src/sim/tours";
 import { partie, type Niveau } from "./joueur";
@@ -41,6 +42,8 @@ const debloqueesAvant = (p: Page): TypeTour[] => {
 for (const p of PAGES) {
   if (filtre && filtre !== p.id) continue;
   const colle = PAGES.slice(0, PAGES.indexOf(p)).some((q) => q.debloque === "colle");
-  bilan(`${p.id} ${p.nom}`, () => optionsDePage(p, { toursDispo: debloqueesAvant(p), colle }), n);
+  const avant = PAGES.slice(0, PAGES.indexOf(p)).map((q) => q.id);
+  const pouvoirs = TYPES_POUVOIRS.filter((k) => avant.includes(POUVOIRS[k].apres));
+  bilan(`${p.id} ${p.nom}`, () => ({ ...optionsDePage(p, { toursDispo: debloqueesAvant(p), colle }), pouvoirs }), n);
 }
-if (!filtre || filtre === "jour") bilan("page du jour", () => optionsPageDuJour("2026-10-24", [...TYPES_TOURS]), n);
+if (!filtre || filtre === "jour") bilan("page du jour", () => ({ ...optionsPageDuJour("2026-10-24", [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS] }), n);
