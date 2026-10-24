@@ -99,7 +99,7 @@ function commencer(d: Debut): void {
     pair: () => l.pair,
     quitter,
     rejouer: hote ? lancer : null,
-    crayon: null, envoye: 0, dernierEnvoi: 0, absentDepuis: 0, parti: false,
+    crayon: null, envoye: 0, dernierEnvoi: 0, absentDepuis: 0, parti: false, vitesseDemandee: null,
   };
   const libelle = page ? `${page.id} ${page.nom} · à deux` : `Page du ${d.jour!.split("-").reverse().slice(0, 2).join("/")} · à deux`;
   demarrerPartie(options, { page: page ?? undefined, mode: "coop", libelle, coop: c });

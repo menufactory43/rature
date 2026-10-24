@@ -51,6 +51,8 @@ export interface CoopPartie {
   absentDepuis: number;
   /** L'autre a quitté la partie : on continue seul. */
   parti: boolean;
+  /** La vitesse demandée, pas encore jouée par le lockstep. */
+  vitesseDemandee: number | null;
 }
 
 /** Le stylo de l'autre, en coop : une encre brune, qu'on ne confond avec aucune tour. */
@@ -129,9 +131,14 @@ function mettrePause(p: Partie, on: boolean): void {
 }
 
 function changerVitesse(p: Partie): void {
-  const v = p.vitesse === 3 ? 1 : p.vitesse + 1;
+  // En coop, la vitesse change deux dixièmes plus tard : on part de la dernière demandée, pour qu'un double toucher fasse ×3
+  const avant = p.coop?.vitesseDemandee ?? p.vitesse;
+  const v = avant === 3 ? 1 : avant + 1;
+  if (p.coop) p.coop.vitesseDemandee = v;
   faire(p, { k: "vitesse", v }, () => (p.vitesse = v));
 }
+
+const vitesseAffichee = (p: Partie) => p.coop?.vitesseDemandee ?? p.vitesse;
 
 function appelerVague(p: Partie): void {
   faire(p, { k: "vague" }, () => lancerVague(p.jeu));
@@ -171,6 +178,7 @@ export function avancerPartie(dt: number): void {
         if (!moi) c.crayon = null;
       });
       p.vitesse = c.commun.vitesse;
+      if (c.vitesseDemandee === p.vitesse) c.vitesseDemandee = null;
       p.pause = c.commun.pause;
       return empreinte(j);
     });
@@ -835,7 +843,7 @@ function bandeauHaut(p: Partie): void {
   ecrire(ctx, String(j.vies), 76, 23, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
   const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
   ecrire(ctx, `vague ${Math.max(1, j.vague)}${total}`, 118, 23, { align: "left", taille: 19 });
-  bouton(W - 50, 8, 42, 30, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
+  bouton(W - 50, 8, 42, 30, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   ecrire(ctx, p.libelle, W - 60, 22, { align: "right", taille: 13, couleur: CRAYON });
   if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     const bonus = Math.round(j.prochaine * 2);
@@ -923,7 +931,7 @@ function bande(p: Partie): { x: number; y: number } {
   const bord = reglages.gaucher ? w - 1 : 1;
   trait(ctx, [{ x: bord, y: 4 }, { x: bord, y: PAGE_H - 4 }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 82 });
   bouton(8, 8, 40, 34, "II", () => mettrePause(p, true), { taille: 17 });
-  bouton(54, 8, 40, 34, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
+  bouton(54, 8, 40, 34, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
   ecrire(ctx, String(j.vies), 40, 69, { align: "left", couleur: ROUGE, taille: 28, police: "titre" });
   const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
@@ -967,7 +975,7 @@ function panneau(p: Partie): { x: number; y: number } {
   ecrire(ctx, p.libelle, x0, 30, { align: "left", police: "titre", taille: tt });
   bouton(droite - 40, 12, 40, 34, "II", () => mettrePause(p, true), { taille: 17 });
   boutonSon(droite - 86, 13);
-  bouton(droite - 134, 12, 42, 34, `×${p.vitesse}`, () => changerVitesse(p), { taille: 17, principal: p.vitesse > 1 });
+  bouton(droite - 134, 12, 42, 34, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   // Les vies, la vague, l'encre
   ecrire(ctx, "♥", x0 + 8, 86, { couleur: ROUGE, taille: 30 });
   ecrire(ctx, String(j.vies), x0 + 28, 87, { align: "left", couleur: ROUGE, taille: 36, police: "titre" });
@@ -1203,10 +1211,14 @@ function dessinerPause(): void {
   if (c) {
     // À deux : la pause vaut pour les deux, et seul l'hôte relance la page
     ecrire(ui.ctx, `à deux · salon ${c.code}`, W / 2, 270, { taille: 15, couleur: CRAYON });
-    if (c.rejouer) bouton(90, 376, 220, 50, "Recommencer à deux", c.rejouer, { taille: 19 });
-    bouton(90, 446, 220, 50, "Quitter la coop", c.quitter, { taille: 19 });
-    bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
-    boutonSon(262, 522);
+    let y = 376;
+    if (c.rejouer) {
+      bouton(90, y, 220, 50, "Recommencer à deux", c.rejouer, { taille: 19 });
+      y += 70;
+    }
+    bouton(90, y, 220, 50, "Quitter la coop", c.quitter, { taille: 19 });
+    bouton(90, y + 70, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
+    boutonSon(262, y + 76);
     return;
   }
   bouton(90, 376, 220, 50, "Recommencer la page", recommencer, { taille: 19 });
