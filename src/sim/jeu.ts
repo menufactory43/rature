@@ -12,6 +12,7 @@ import { VAGUES_ENTRE_CHOIX, appliquer, boostNeutre, tirer, type Boost, type Fou
 import { Rng } from "./rng";
 import { PORTEE_INFINIE, RAYON_TOUR, TOURS, TYPES_TOURS as TYPES_TOURS_LISTE, prochainCout, pvTour, statsTour, tourDuGlyphe, type Stats, type TypeTour } from "./tours";
 import { estVagueBoss, planifier, type PlanVague, type ReglesVagues } from "./vagues";
+import { atan2, cos, hypot, sin } from "./maths";
 
 export { LARGEUR, HAUTEUR };
 
@@ -381,7 +382,7 @@ export function refusPose(j: Jeu, x: number, y: number): string | null {
   if (j.carte.entrees.some((e) => dist({ x, y }, e.bord) < 26)) return "sur une entrée";
   for (let dy = -8; dy <= 8; dy += 8) for (let dx = -8; dx <= 8; dx += 8) if (j.carte.bloque[caseDe(x + dx, y + dy)]) return "sur un obstacle";
   if (j.carte.interdit[caseDe(x, y)]) return "on n'écrit pas dans ce cadre";
-  if (j.tours.some((t) => Math.hypot(t.x - x, t.y - y) < RAYON_TOUR * 2 + 4)) return "trop près d'une autre tour";
+  if (j.tours.some((t) => hypot(t.x - x, t.y - y) < RAYON_TOUR * 2 + 4)) return "trop près d'une autre tour";
   if (j.options.defi === "quatreTours" && j.tours.length >= 4) return "4 tours maximum (défi)";
   return null;
 }
@@ -510,7 +511,7 @@ const forcePouvoir = (j: Jeu, base: number) => base * j.regles.difficulte * eche
 export function segmentRegle(trace: V[]): [V, V] {
   const a = trace[0];
   const b = trace[trace.length - 1];
-  const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const l = hypot(b.x - a.x, b.y - a.y) || 1;
   const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   const demi = Math.min(l, LONGUEUR_REGLE) / 2;
   return [{ x: m.x - ((b.x - a.x) / l) * demi, y: m.y - ((b.y - a.y) / l) * demi }, { x: m.x + ((b.x - a.x) / l) * demi, y: m.y + ((b.y - a.y) / l) * demi }];
@@ -520,7 +521,7 @@ export function segmentRegle(trace: V[]): [V, V] {
 export function zoneGomme(trace: V[]): { x: number; y: number; r: number } {
   const x = trace.reduce((s, p) => s + p.x, 0) / trace.length;
   const y = trace.reduce((s, p) => s + p.y, 0) / trace.length;
-  const moy = trace.reduce((s, p) => s + Math.hypot(p.x - x, p.y - y), 0) / trace.length;
+  const moy = trace.reduce((s, p) => s + hypot(p.x - x, p.y - y), 0) / trace.length;
   return { x, y, r: Math.max(36, Math.min(70, moy * 1.5 + 12)) };
 }
 
@@ -534,7 +535,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
   let touches = 0;
   if (p === "regle") {
     const [a, b] = segmentRegle(trace);
-    if (Math.hypot(b.x - a.x, b.y - a.y) < 50) return refuser(j, fin.x, fin.y, res(false, "trop court"));
+    if (hypot(b.x - a.x, b.y - a.y) < 50) return refuser(j, fin.x, fin.y, res(false, "trop court"));
     const d = forcePouvoir(j, 45);
     for (const e of j.ennemis) {
       if (e.mort || pointSegDist(e, a, b) > LARGEUR_REGLE + e.r) continue;
@@ -547,7 +548,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
     j.sons.push("boom");
   } else if (p === "lasso") {
     const a = trace[0];
-    if (l < 80 || Math.hypot(fin.x - a.x, fin.y - a.y) > Math.max(40, l * 0.3)) return refuser(j, fin.x, fin.y, res(false, "ferme la boucle"));
+    if (l < 80 || hypot(fin.x - a.x, fin.y - a.y) > Math.max(40, l * 0.3)) return refuser(j, fin.x, fin.y, res(false, "ferme la boucle"));
     const poly = resample(trace, 8);
     const duree = 4.5;
     for (const e of j.ennemis) {
@@ -566,7 +567,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
     const z = zoneGomme(trace);
     const d = forcePouvoir(j, 110);
     for (const e of j.ennemis) {
-      if (e.mort || Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.r * 0.5) continue;
+      if (e.mort || hypot(e.x - z.x, e.y - z.y) > z.r + e.r * 0.5) continue;
       e.bouclier = 0;
       blesser(j, e, d, { chiffre: true, ignoreArmure: true });
       touches++;
@@ -599,7 +600,7 @@ function remplirSurcout(s: Float32Array, murs: { segs: SegMur[] }[], tours: V[])
     const r = RAYON_TOUR + 4;
     for (let l = Math.floor((t.y - r) / CASE); l <= Math.floor((t.y + r) / CASE); l++)
       for (let c = Math.floor((t.x - r) / CASE); c <= Math.floor((t.x + r) / CASE); c++)
-        if (c >= 0 && l >= 0 && c < COLS && l < LIGNES && Math.hypot((c + 0.5) * CASE - t.x, (l + 0.5) * CASE - t.y) < r) s[indice(c, l)] = COUT_TOUR;
+        if (c >= 0 && l >= 0 && c < COLS && l < LIGNES && hypot((c + 0.5) * CASE - t.x, (l + 0.5) * CASE - t.y) < r) s[indice(c, l)] = COUT_TOUR;
   }
 }
 
@@ -636,7 +637,7 @@ export function ajouterEnnemi(j: Jeu, type: TypeEnnemi, x: number, y: number, va
     id: j.prochainId++, type, x, y, vx: 0, vy: 0, pv, pvMax: pv, bouclier: (f.bouclier ?? 0) * j.regles.difficulte * echellePv(Math.max(1, vague)), r: f.rayon,
     age: 0, zig: (j.prochainId * 1.7) % 6.28, bloque: false, englue: 0, etourdi: 0, marque: 0, revele: 0, acide: 0, ralenti: 0,
     mort: false, ponte: 2, touche: 0, vol: 0, retour: null, ri: 0,
-    entree: j.carte.entrees.reduce((b, en, i) => (Math.hypot(en.depart.x - x, en.depart.y - y) < Math.hypot(j.carte.entrees[b].depart.x - x, j.carte.entrees[b].depart.y - y) ? i : b), 0),
+    entree: j.carte.entrees.reduce((b, en, i) => (hypot(en.depart.x - x, en.depart.y - y) < hypot(j.carte.entrees[b].depart.x - x, j.carte.entrees[b].depart.y - y) ? i : b), 0),
   };
   j.ennemis.push(e);
   return e;
@@ -677,7 +678,7 @@ function tuer(j: Jeu, e: Ennemi): void {
   let prime = f.prime * j.talents.primes;
   for (const t of j.tours) {
     const s = stats(t);
-    if (s.primeBonus && Math.hypot(t.x - e.x, t.y - e.y) < s.portee) {
+    if (s.primeBonus && hypot(t.x - e.x, t.y - e.y) < s.portee) {
       prime *= 1 + s.primeBonus;
       break;
     }
@@ -690,20 +691,20 @@ function tuer(j: Jeu, e: Ennemi): void {
     j.sons.push("ding");
     e.vol = 0;
   }
-  j.evts.push({ k: "mort", type: e.type, x: e.x, y: e.y, r: e.r, id: e.id, angle: Math.atan2(e.vy, e.vx), prime });
+  j.evts.push({ k: "mort", type: e.type, x: e.x, y: e.y, r: e.r, id: e.id, angle: atan2(e.vy, e.vx), prime });
   j.eclats.push({ x: e.x, y: e.y, r: e.r * 1.4, graine: e.id });
   if (j.eclats.length > 160) j.eclats.shift();
   j.sons.push("pop");
   if (e.type === "tache") for (const s of [-1, 1]) ajouterEnnemi(j, "petite", e.x + s * 9, e.y + s * 4);
-  if (e.type === "mere") for (let k = 0; k < 6; k++) ajouterEnnemi(j, "tache", e.x + Math.cos(k) * 30, e.y + Math.sin(k) * 30);
+  if (e.type === "mere") for (let k = 0; k < 6; k++) ajouterEnnemi(j, "tache", e.x + cos(k) * 30, e.y + sin(k) * 30);
   if (f.boss) effet(j, "boom", e.x, e.y, 0.7, { r: 80 });
 }
 
-const visible = (e: Ennemi, t: Tour) => !ENNEMIS[e.type].furtif || e.revele > 0 || TOURS[t.type].voitFurtifs || Math.hypot(e.x - t.x, e.y - t.y) < 50;
+const visible = (e: Ennemi, t: Tour) => !ENNEMIS[e.type].furtif || e.revele > 0 || TOURS[t.type].voitFurtifs || hypot(e.x - t.x, e.y - t.y) < 50;
 
 /** Distance restante jusqu'au Cœur (en cases), pour « premier » et « dernier ». */
 export function progression(j: Jeu, e: Ennemi): number {
-  if (ENNEMIS[e.type].vole) return Math.hypot(e.x - j.carte.coeur.x, e.y - j.carte.coeur.y) / CASE;
+  if (ENNEMIS[e.type].vole) return hypot(e.x - j.carte.coeur.x, e.y - j.carte.coeur.y) / CASE;
   if (e.x < 0 || e.y < 0 || e.x > LARGEUR || e.y > HAUTEUR) return 1e5;
   return j.champ.distance(e);
 }
@@ -714,7 +715,7 @@ function choisirCible(j: Jeu, t: Tour, portee: number, exclus?: Set<number>): En
   for (const e of j.ennemis) {
     if (e.mort || exclus?.has(e.id)) continue;
     if (e.x < -4 || e.y < -4 || e.x > LARGEUR + 4 || e.y > HAUTEUR + 4) continue;
-    const d = Math.hypot(e.x - t.x, e.y - t.y);
+    const d = hypot(e.x - t.x, e.y - t.y);
     if (d > portee + e.r || !visible(e, t)) continue;
     const s = t.cible === "premier" ? progression(j, e) : t.cible === "dernier" ? -progression(j, e) : t.cible === "fort" ? -e.pv : d;
     if (s < score) {
@@ -774,7 +775,7 @@ export function step(j: Jeu, dt: number): void {
   for (const r of j.rendus) {
     const dx = j.carte.coeur.x - r.x;
     const dy = j.carte.coeur.y - r.y;
-    const d = Math.hypot(dx, dy);
+    const d = hypot(dx, dy);
     const pas = Math.min(d, 110 * dt);
     if (d > 0) {
       r.x += (dx / d) * pas;
@@ -867,17 +868,17 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       e.ponte -= dt;
       if (e.ponte <= 0) {
         e.ponte = e.type === "mere" ? 2.6 : 3.2;
-        ajouterEnnemi(j, e.type === "mere" ? "petite" : "araignee", e.x + Math.cos(e.age) * e.r, e.y + Math.sin(e.age) * e.r);
+        ajouterEnnemi(j, e.type === "mere" ? "petite" : "araignee", e.x + cos(e.age) * e.r, e.y + sin(e.age) * e.r);
       }
     }
     if (f.soigne) {
       for (const o of vivants) {
         if (o === e || o.mort || ENNEMIS[o.type].boss) continue;
-        if (Math.hypot(o.x - e.x, o.y - e.y) < 60 && o.pv < o.pvMax) o.pv = Math.min(o.pvMax, o.pv + o.pvMax * f.soigne * dt);
+        if (hypot(o.x - e.x, o.y - e.y) < 60 && o.pv < o.pvMax) o.pv = Math.min(o.pvMax, o.pv + o.pvMax * f.soigne * dt);
       }
     }
     if (f.devore) {
-      for (const t of j.tours) if (Math.hypot(t.x - e.x, t.y - e.y) < e.r + RAYON_TOUR + 8) t.pv -= f.devore * dt;
+      for (const t of j.tours) if (hypot(t.x - e.x, t.y - e.y) < e.r + RAYON_TOUR + 8) t.pv -= f.devore * dt;
     }
     // Le ralentissement : colle, spirales, café
     let lent = 0;
@@ -894,13 +895,13 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     }
     for (const t of j.tours) {
       const s = stats(t);
-      if (s.ralenti && Math.hypot(t.x - e.x, t.y - e.y) < s.portee + e.r) {
+      if (s.ralenti && hypot(t.x - e.x, t.y - e.y) < s.portee + e.r) {
         lent = Math.max(lent, f.boss ? s.ralenti * 0.5 : s.ralenti);
         if (s.dps) blesser(j, e, s.dps * dt, { continu: true, ignoreArmure: true });
         if (s.rongeArmure) e.acide = 0.3;
       }
     }
-    for (const z of j.zones) if (Math.hypot(z.x - e.x, z.y - e.y) < z.r + e.r) blesser(j, e, z.dps * dt, { continu: true });
+    for (const z of j.zones) if (hypot(z.x - e.x, z.y - e.y) < z.r + e.r) blesser(j, e, z.dps * dt, { continu: true });
     if (e.mort) continue;
     e.ralenti = lent;
     if (e.etourdi > 0 || e.englue > 0) continue;
@@ -910,7 +911,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       const cible = e.ri < e.retour.length ? e.retour[e.ri] : j.carte.entrees[e.entree].depart;
       const dx = cible.x - e.x;
       const dy = cible.y - e.y;
-      const d = Math.hypot(dx, dy);
+      const d = hypot(dx, dy);
       if (d < 6 && e.ri < e.retour.length) e.ri++;
       const pas = Math.min(d, vitesse * 1.1 * dt);
       if (d > 0) {
@@ -932,12 +933,12 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     let dir: V;
     let proie: Tour | null = null;
     if (f.vole) {
-      const n = Math.hypot(coeur.x - e.x, coeur.y - e.y) || 1;
+      const n = hypot(coeur.x - e.x, coeur.y - e.y) || 1;
       dir = { x: (coeur.x - e.x) / n, y: (coeur.y - e.y) / n };
     } else if (f.chasseur && j.tours.length) {
       let bd = Infinity;
       for (const t of j.tours) {
-        const d = Math.hypot(t.x - e.x, t.y - e.y);
+        const d = hypot(t.x - e.x, t.y - e.y);
         if (d < bd) {
           bd = d;
           proie = t;
@@ -947,17 +948,17 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       dir = { x: (proie!.x - e.x) / n, y: (proie!.y - e.y) / n };
     } else dir = j.champ.direction(e);
     if (e.type === "araignee" || e.type === "compas") {
-      const w = Math.sin(e.age * 3.2 + e.zig) * 0.8;
+      const w = sin(e.age * 3.2 + e.zig) * 0.8;
       const px = -dir.y;
       const py = dir.x;
-      const n = Math.hypot(dir.x + px * w, dir.y + py * w) || 1;
+      const n = hypot(dir.x + px * w, dir.y + py * w) || 1;
       dir = { x: (dir.x + px * w) / n, y: (dir.y + py * w) / n };
     }
     // Un virage en douceur
     const lissage = Math.min(1, dt * 10);
     e.vx += (dir.x - e.vx) * lissage;
     e.vy += (dir.y - e.vy) * lissage;
-    const n = Math.hypot(e.vx, e.vy) || 1;
+    const n = hypot(e.vx, e.vy) || 1;
     const nx = e.x + (e.vx / n) * vitesse * dt;
     const ny = e.y + (e.vy / n) * vitesse * dt;
     if (!f.vole) {
@@ -982,7 +983,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     }
     e.x = nx;
     e.y = ny;
-    if (Math.hypot(e.x - coeur.x, e.y - coeur.y) < 14 + e.r) {
+    if (hypot(e.x - coeur.x, e.y - coeur.y) < 14 + e.r) {
       // Il arrache des vies au Cœur et repart avec : on peut encore les reprendre en le raturant sur le chemin du retour
       const vol = Math.min(f.vies, j.vies);
       j.vies -= vol;
@@ -997,7 +998,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
         e.retour = t.map((p, i) => {
           const a = t[Math.max(0, i - 1)];
           const b = t[Math.min(t.length - 1, i + 1)];
-          const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+          const n = hypot(b.x - a.x, b.y - a.y) || 1;
           return { x: p.x - ((b.y - a.y) / n) * 16, y: p.y + ((b.x - a.x) / n) * 16 };
         });
         e.ri = 0;
@@ -1024,8 +1025,8 @@ function murBloquant(j: Jeu, e: Ennemi, nx: number, ny: number): SegMur | null {
 
 function tourBloquante(j: Jeu, e: Ennemi, nx: number, ny: number): Tour | null {
   for (const t of j.tours) {
-    const apres = Math.hypot(nx - t.x, ny - t.y);
-    if (apres < RAYON_TOUR + e.r && apres < Math.hypot(e.x - t.x, e.y - t.y)) return t;
+    const apres = hypot(nx - t.x, ny - t.y);
+    if (apres < RAYON_TOUR + e.r && apres < hypot(e.x - t.x, e.y - t.y)) return t;
   }
   return null;
 }
@@ -1040,17 +1041,17 @@ function tours(j: Jeu, dt: number): void {
       case "roquette": {
         const c = choisirCible(j, t, s.portee);
         if (!c) break;
-        t.angle = Math.atan2(c.y - t.y, c.x - t.x);
+        t.angle = atan2(c.y - t.y, c.x - t.x);
         if (t.cd > 0) break;
         t.cd = s.intervalle;
         t.recul = 1;
         const v = t.type === "plume" ? 520 : 300;
         j.tirs.push({
-          x: t.x + Math.cos(t.angle) * 14, y: t.y + Math.sin(t.angle) * 14, vx: Math.cos(t.angle) * v, vy: Math.sin(t.angle) * v,
+          x: t.x + cos(t.angle) * 14, y: t.y + sin(t.angle) * 14, vx: cos(t.angle) * v, vy: sin(t.angle) * v,
           degats: s.degats, type: t.type, cible: { x: c.x, y: c.y }, perce: s.perce ?? 1, touches: [], vie: (s.portee + 40) / v, tour: t.id,
         });
         j.sons.push(t.type === "plume" ? "tir" : "boom");
-        j.evts.push({ k: "tir", tour: t.type, id: t.id, x: t.x + Math.cos(t.angle) * 16, y: t.y + Math.sin(t.angle) * 16, angle: t.angle });
+        j.evts.push({ k: "tir", tour: t.type, id: t.id, x: t.x + cos(t.angle) * 16, y: t.y + sin(t.angle) * 16, angle: t.angle });
         break;
       }
       case "foudre": {
@@ -1058,7 +1059,7 @@ function tours(j: Jeu, dt: number): void {
         let e = choisirCible(j, t, s.portee);
         if (!e) break;
         t.cd = s.intervalle;
-        t.angle = Math.atan2(e.y - t.y, e.x - t.x);
+        t.angle = atan2(e.y - t.y, e.x - t.x);
         const vus = new Set<number>();
         const pts: V[] = [{ x: t.x, y: t.y }];
         for (let k = 0; k < (s.rebonds ?? 3) && e; k++) {
@@ -1070,7 +1071,7 @@ function tours(j: Jeu, dt: number): void {
           let bd = 90;
           for (const o of j.ennemis) {
             if (o.mort || vus.has(o.id)) continue;
-            const d = Math.hypot(o.x - e.x, o.y - e.y);
+            const d = hypot(o.x - e.x, o.y - e.y);
             if (d < bd) {
               bd = d;
               suivant = o;
@@ -1088,7 +1089,7 @@ function tours(j: Jeu, dt: number): void {
         const e = choisirCible(j, t, PORTEE_INFINIE);
         if (!e) break;
         t.cd = s.intervalle;
-        t.angle = Math.atan2(e.y - t.y, e.x - t.x);
+        t.angle = atan2(e.y - t.y, e.x - t.x);
         t.recul = 1;
         let d = s.degats;
         const crit = !!s.critique && j.rng.next() < s.critique;
@@ -1110,7 +1111,7 @@ function tours(j: Jeu, dt: number): void {
           let n = 0;
           for (const e of j.ennemis) {
             if (e.mort || ENNEMIS[e.type].vole || ENNEMIS[e.type].boss) continue;
-            if (Math.hypot(e.x - t.x, e.y - t.y) < s.portee + e.r) {
+            if (hypot(e.x - t.x, e.y - t.y) < s.portee + e.r) {
               e.englue = s.englue;
               n++;
             }
@@ -1126,7 +1127,7 @@ function tours(j: Jeu, dt: number): void {
         const n = s.lames ?? 2;
         for (let k = 0; k < n; k++) {
           const p = positionLame(j, t, k, n, s.orbite ?? 36);
-          for (const e of j.ennemis) if (!e.mort && Math.hypot(e.x - p.x, e.y - p.y) < e.r + 8) blesser(j, e, (s.dps ?? 0) * dt, { continu: true, ignoreArmure: s.ignoreArmure });
+          for (const e of j.ennemis) if (!e.mort && hypot(e.x - p.x, e.y - p.y) < e.r + 8) blesser(j, e, (s.dps ?? 0) * dt, { continu: true, ignoreArmure: s.ignoreArmure });
         }
         break;
       }
@@ -1138,7 +1139,7 @@ function tours(j: Jeu, dt: number): void {
 
 export function positionLame(j: Jeu, t: Tour, k: number, n: number, orbite: number): V {
   const a = j.temps * 3 + (k * Math.PI * 2) / n + t.id;
-  return { x: t.x + Math.cos(a) * orbite, y: t.y + Math.sin(a) * orbite };
+  return { x: t.x + cos(a) * orbite, y: t.y + sin(a) * orbite };
 }
 
 function bougerTirs(j: Jeu, dt: number): void {
@@ -1150,11 +1151,11 @@ function bougerTirs(j: Jeu, dt: number): void {
     const st = t ? stats(t) : null;
     if (s.type === "roquette") {
       // La roquette explose au point visé, ou sur le premier monstre qu'elle percute
-      let explose = Math.hypot(s.x - s.cible.x, s.y - s.cible.y) < 8 || s.vie <= 0;
-      for (const e of j.ennemis) if (!e.mort && !ENNEMIS[e.type].vole && Math.hypot(e.x - s.x, e.y - s.y) < e.r + 3) explose = true;
+      let explose = hypot(s.x - s.cible.x, s.y - s.cible.y) < 8 || s.vie <= 0;
+      for (const e of j.ennemis) if (!e.mort && !ENNEMIS[e.type].vole && hypot(e.x - s.x, e.y - s.y) < e.r + 3) explose = true;
       if (explose) {
         const zone = st?.zone ?? 30;
-        for (const e of j.ennemis) if (!e.mort && Math.hypot(e.x - s.x, e.y - s.y) < zone + e.r) blesser(j, e, s.degats, { chiffre: true });
+        for (const e of j.ennemis) if (!e.mort && hypot(e.x - s.x, e.y - s.y) < zone + e.r) blesser(j, e, s.degats, { chiffre: true });
         if (st?.dps) j.zones.push({ x: s.x, y: s.y, r: zone * 0.8, dps: st.dps, age: 0, vie: 2.5 });
         effet(j, "boom", s.x, s.y, 0.45, { r: zone });
         j.evts.push({ k: "boom", x: s.x, y: s.y, r: zone });
@@ -1163,9 +1164,9 @@ function bougerTirs(j: Jeu, dt: number): void {
       continue;
     }
     for (const e of j.ennemis) {
-      if (e.mort || s.touches.includes(e.id) || Math.hypot(e.x - s.x, e.y - s.y) > e.r + 3) continue;
+      if (e.mort || s.touches.includes(e.id) || hypot(e.x - s.x, e.y - s.y) > e.r + 3) continue;
       blesser(j, e, s.degats, { chiffre: s.degats >= 20 });
-      j.evts.push({ k: "impact", x: s.x, y: s.y, angle: Math.atan2(s.vy, s.vx) });
+      j.evts.push({ k: "impact", x: s.x, y: s.y, angle: atan2(s.vy, s.vx) });
       s.touches.push(e.id);
       if (s.touches.length >= s.perce) {
         s.vie = 0;

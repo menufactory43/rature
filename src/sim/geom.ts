@@ -1,11 +1,12 @@
 // Géométrie du cahier : points, segments, tracés.
+import { hypot } from "./maths";
 
 export interface V {
   x: number;
   y: number;
 }
 
-export const dist = (a: V, b: V) => Math.hypot(a.x - b.x, a.y - b.y);
+export const dist = (a: V, b: V) => hypot(a.x - b.x, a.y - b.y);
 
 /** Distance d'un point à un segment [a, b]. */
 export function pointSegDist(p: V, a: V, b: V): number {
@@ -14,7 +15,7 @@ export function pointSegDist(p: V, a: V, b: V): number {
   const l2 = dx * dx + dy * dy;
   let t = l2 === 0 ? 0 : ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
   t = Math.max(0, Math.min(1, t));
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  return hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
 /** Distance d'un point au tracé le plus proche d'une ligne brisée. */

@@ -2,6 +2,7 @@
 // Une case libre coûte 1, un mur coûte le temps de le ronger, une tour coûte très cher, un obstacle est infranchissable.
 import { CASE, COLS, LIGNES, caseDe, indice, type Carte } from "./carte";
 import type { V } from "./geom";
+import { hypot } from "./maths";
 
 export const COUT_TOUR = 400;
 
@@ -22,7 +23,7 @@ export class Champ {
       for (let c = 0; c < COLS; c++) {
         const x = (c + 0.5) * CASE;
         const y = (l + 0.5) * CASE;
-        if (Math.hypot(x - coeur.x, y - coeur.y) <= 16) {
+        if (hypot(x - coeur.x, y - coeur.y) <= 16) {
           const i = indice(c, l);
           dist[i] = 0;
           tas.pousser(i, 0);
@@ -66,7 +67,7 @@ export class Champ {
     // Hors de la page : on rentre par le bord le plus proche
     if (c0 < 0 || l0 < 0 || c0 >= COLS || l0 >= LIGNES) {
       const cible = { x: Math.max(CASE, Math.min(COLS * CASE - CASE, p.x)), y: Math.max(CASE, Math.min(LIGNES * CASE - CASE, p.y)) };
-      const n = Math.hypot(cible.x - p.x, cible.y - p.y) || 1;
+      const n = hypot(cible.x - p.x, cible.y - p.y) || 1;
       return { x: (cible.x - p.x) / n, y: (cible.y - p.y) / n };
     }
     const ici = this.dist[indice(c0, l0)];
@@ -92,7 +93,7 @@ export class Champ {
       bx = this.carte.coeur.x - p.x;
       by = this.carte.coeur.y - p.y;
     }
-    const n = Math.hypot(bx, by) || 1;
+    const n = hypot(bx, by) || 1;
     return { x: bx / n, y: by / n };
   }
 
@@ -104,7 +105,7 @@ export class Champ {
       const d = this.direction(p);
       p = { x: p.x + d.x * CASE, y: p.y + d.y * CASE };
       pts.push(p);
-      if (Math.hypot(p.x - this.carte.coeur.x, p.y - this.carte.coeur.y) < 14) break;
+      if (hypot(p.x - this.carte.coeur.x, p.y - this.carte.coeur.y) < 14) break;
     }
     return pts;
   }

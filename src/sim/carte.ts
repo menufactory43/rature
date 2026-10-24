@@ -4,6 +4,7 @@
 //   E  entrée (au bord de la page)   C  le Cœur (2×2)   ~  café renversé (ralentit)
 import type { V } from "./geom";
 import { Rng } from "./rng";
+import { hypot } from "./maths";
 
 export const LARGEUR = 400;
 export const HAUTEUR = 720;
@@ -180,7 +181,7 @@ export function genererCarte(graine: number, nom = "Page du jour"): Carte {
     }
     const texte = g.map((l) => l.join("")).join("\n");
     const carte = lireCarte(nom, texte, rng.pick(["seyes", "carreaux", "portee"] as const));
-    if (carte.entrees.length && toutesReliees(carte) && carte.entrees.every((e) => Math.hypot(e.depart.x - carte.coeur.x, e.depart.y - carte.coeur.y) > 380)) return carte;
+    if (carte.entrees.length && toutesReliees(carte) && carte.entrees.every((e) => hypot(e.depart.x - carte.coeur.x, e.depart.y - carte.coeur.y) > 380)) return carte;
   }
   throw new Error("carte impossible à générer");
 }

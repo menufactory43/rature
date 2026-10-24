@@ -3,6 +3,7 @@
 // modèles ; le plus proche gagne s'il est assez proche.
 import type { V } from "./geom";
 import { polylineLength, resample } from "./geom";
+import { atan2, cos, hypot, sin } from "./maths";
 
 export type Glyphe = "cercle" | "triangle" | "eclair" | "coche" | "spirale" | "etoile" | "coupe";
 
@@ -17,9 +18,9 @@ const centre = (pts: V[]): V => ({ x: pts.reduce((s, p) => s + p.x, 0) / pts.len
 
 function tourner(pts: V[], a: number): V[] {
   const c = centre(pts);
-  const cos = Math.cos(a);
-  const sin = Math.sin(a);
-  return pts.map((p) => ({ x: (p.x - c.x) * cos - (p.y - c.y) * sin + c.x, y: (p.x - c.x) * sin + (p.y - c.y) * cos + c.y }));
+  const ca = cos(a);
+  const sa = sin(a);
+  return pts.map((p) => ({ x: (p.x - c.x) * ca - (p.y - c.y) * sa + c.x, y: (p.x - c.x) * sa + (p.y - c.y) * ca + c.y }));
 }
 
 function echelle(pts: V[]): V[] {
@@ -43,13 +44,13 @@ function normaliser(trace: V[]): V[] {
   while (pts.length < N) pts.push({ ...pts[pts.length - 1] });
   pts = pts.slice(0, N);
   const c = centre(pts);
-  pts = tourner(pts, -Math.atan2(c.y - pts[0].y, c.x - pts[0].x));
+  pts = tourner(pts, -atan2(c.y - pts[0].y, c.x - pts[0].x));
   return centrer(echelle(pts));
 }
 
 function distanceChemin(a: V[], b: V[]): number {
   let d = 0;
-  for (let i = 0; i < a.length; i++) d += Math.hypot(a[i].x - b[i].x, a[i].y - b[i].y);
+  for (let i = 0; i < a.length; i++) d += hypot(a[i].x - b[i].x, a[i].y - b[i].y);
   return d / a.length;
 }
 
@@ -86,7 +87,7 @@ const lignes = (pts: [number, number][]) => {
 
 /** Les formes de référence (à l'endroit) ; chacune sert dans les deux sens de tracé et avec plusieurs départs. */
 export const FORMES: Record<Glyphe, V[][]> = {
-  cercle: [0, 1, 2, 3].map((k) => arc(40, (t) => ({ x: Math.cos(t * Math.PI * 2 + (k * Math.PI) / 2), y: Math.sin(t * Math.PI * 2 + (k * Math.PI) / 2) }))),
+  cercle: [0, 1, 2, 3].map((k) => arc(40, (t) => ({ x: cos(t * Math.PI * 2 + (k * Math.PI) / 2), y: sin(t * Math.PI * 2 + (k * Math.PI) / 2) }))),
   triangle: [
     lignes([[0, -1], [-0.9, 0.7], [0.9, 0.7], [0, -1]]),
     lignes([[-0.9, 0.7], [0.9, 0.7], [0, -1], [-0.9, 0.7]]),
@@ -98,16 +99,16 @@ export const FORMES: Record<Glyphe, V[][]> = {
   ],
   coche: [lignes([[0, 0.55], [0.35, 1], [1, 0]]), lignes([[0, 0.6], [0.3, 1], [1, -0.3]])],
   spirale: [
-    arc(60, (t) => ({ x: Math.cos(t * Math.PI * 5) * (0.1 + t), y: Math.sin(t * Math.PI * 5) * (0.1 + t) })),
-    arc(60, (t) => ({ x: Math.cos(t * Math.PI * 4) * (0.15 + t), y: Math.sin(t * Math.PI * 4) * (0.15 + t) })),
+    arc(60, (t) => ({ x: cos(t * Math.PI * 5) * (0.1 + t), y: sin(t * Math.PI * 5) * (0.1 + t) })),
+    arc(60, (t) => ({ x: cos(t * Math.PI * 4) * (0.15 + t), y: sin(t * Math.PI * 4) * (0.15 + t) })),
   ],
   etoile: [0, 1, 2, 3, 4].map((k) => lignes(Array.from({ length: 6 }, (_, i) => {
     const a = -Math.PI / 2 + (((i + k) * 2) % 5) * ((Math.PI * 2) / 5);
-    return [Math.cos(a), Math.sin(a)] as [number, number];
+    return [cos(a), sin(a)] as [number, number];
   }))),
   coupe: [
-    [...lignes([[0, 0], [0, 0.55]]), ...arc(20, (t) => ({ x: 0.5 - Math.cos(t * Math.PI) * 0.5, y: 0.55 + Math.sin(t * Math.PI) * 0.45 })), ...lignes([[1, 0.55], [1, 0]])],
-    arc(30, (t) => ({ x: 0.5 - Math.cos(t * Math.PI) * 0.5, y: Math.sin(t * Math.PI) })),
+    [...lignes([[0, 0], [0, 0.55]]), ...arc(20, (t) => ({ x: 0.5 - cos(t * Math.PI) * 0.5, y: 0.55 + sin(t * Math.PI) * 0.45 })), ...lignes([[1, 0.55], [1, 0]])],
+    arc(30, (t) => ({ x: 0.5 - cos(t * Math.PI) * 0.5, y: sin(t * Math.PI) })),
   ],
 };
 
