@@ -16,6 +16,18 @@ export function regler(temps: number): void {
 
 const tremble = (graine: number, i: number, amp: number) => (hash3(graine, i, tic) - 0.5) * 2 * amp;
 
+/** Le stylo en main : remplace le bleu par défaut (chaque famille de tour a sa couleur de stylo). */
+let stylo: string | null = null;
+export function avecStylo(couleur: string | null, dessin: () => void): void {
+  const avant = stylo;
+  stylo = couleur;
+  try {
+    dessin();
+  } finally {
+    stylo = avant;
+  }
+}
+
 export interface Trait {
   couleur?: string;
   epaisseur?: number;
@@ -34,8 +46,10 @@ export function trait(ctx: CanvasRenderingContext2D, pts: V[], o: Trait = {}): v
   const amp = o.amp ?? 0.7;
   ctx.save();
   ctx.globalAlpha *= o.alpha ?? 1;
-  ctx.strokeStyle = o.couleur ?? BLEU;
-  ctx.lineWidth = o.epaisseur ?? 2;
+  const couleur = stylo && (!o.couleur || o.couleur === BLEU) ? stylo : o.couleur ?? BLEU;
+  const w = o.epaisseur ?? 2;
+  ctx.strokeStyle = couleur;
+  ctx.lineWidth = w;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.beginPath();
@@ -47,10 +61,23 @@ export function trait(ctx: CanvasRenderingContext2D, pts: V[], o: Trait = {}): v
   }
   if (o.ferme) ctx.closePath();
   if (o.fond) {
-    ctx.fillStyle = o.fond;
+    ctx.fillStyle = stylo && o.fond === BLEU ? stylo : o.fond;
     ctx.fill();
   }
   ctx.stroke();
+  if (w >= 1.5) {
+    // La bille laisse moins d'encre au milieu du sillon : un reflet clair le long du trait
+    ctx.strokeStyle = "rgba(255,250,235,0.22)";
+    ctx.lineWidth = w * 0.32;
+    ctx.stroke();
+    // Et parfois un petit pâté au départ, là où la bille s'est posée (fixe, pour ne pas clignoter)
+    if (!o.ferme && hash3(g, 97, 0) < 0.45) {
+      ctx.fillStyle = couleur;
+      ctx.beginPath();
+      ctx.arc(pts[0].x, pts[0].y, w * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   ctx.restore();
 }
 

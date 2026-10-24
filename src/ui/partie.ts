@@ -6,7 +6,7 @@ import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, rectangle, tra
 import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
-import { symbole } from "../render/tours";
+import { STYLOS, symbole } from "../render/tours";
 import { icone } from "../render/pouvoirs";
 import { POUVOIRS, type Pouvoir } from "../sim/pouvoirs";
 import type { Fourniture } from "../sim/interro";
@@ -291,7 +291,10 @@ export function dessinerPartie(echelle: number): void {
   ctx.translate(sec.x, HAUT + sec.y);
   let brouillon: Brouillon | null = null;
   if (p.trace && p.arme) brouillon = { pts: p.trace, geste: "rien", pouvoir: p.arme };
-  else if (p.trace) brouillon = { pts: p.trace, geste: classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]).geste };
+  else if (p.trace) {
+    const c = classer([...p.trace, { ...p.trace[p.trace.length - 1], t: performance.now() }]);
+    brouillon = { pts: p.trace, geste: c.geste, couleur: c.geste === "tour" ? STYLOS[tourDe(c.glyphe!)] : undefined };
+  }
   scene(ctx, j, brouillon, p.selection);
   if (p.trace && p.trace.length > 3 && !p.arme) apercu(p);
   if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
@@ -381,7 +384,7 @@ function choixFournitures(p: Partie, choix: Fourniture[]): void {
 }
 
 function iconeFourniture(ctx: CanvasRenderingContext2D, f: Fourniture, x: number, y: number): void {
-  if (f.tour) symbole(ctx, TOURS[f.tour].glyphe, x, y, 16, f.famille === "tour" ? BLEU : CRAYON, 2.4);
+  if (f.tour) symbole(ctx, TOURS[f.tour].glyphe, x, y, 16, f.famille === "tour" ? STYLOS[f.tour] : CRAYON, 2.4);
   if (f.famille === "boost") ecrire(ctx, "+", x + (f.tour ? 18 : 0), y - (f.tour ? 16 : 0), { police: "titre", taille: f.tour ? 26 : 44, couleur: ROUGE });
   else if (f.famille === "pouvoir") icone(ctx, f.pouvoir ?? "regle", x, y, 16, true);
   else if (f.famille === "encre") {
@@ -652,8 +655,8 @@ function bandeauBas(p: Partie): void {
     const y = y0 + 60;
     const cout = coutPose(j, t);
     const possible = j.encre >= cout;
-    symbole(ctx, TOURS[t].glyphe, x, y - 6, 9, possible ? BLEU : CRAYON, 1.8);
-    ecrire(ctx, String(cout), x, y + 16, { taille: 12, couleur: possible ? BLEU : CRAYON });
+    symbole(ctx, TOURS[t].glyphe, x, y - 6, 9, possible ? STYLOS[t] : CRAYON, 1.8);
+    ecrire(ctx, String(cout), x, y + 16, { taille: 12, couleur: possible ? STYLOS[t] : CRAYON });
     zone(x - largeur / 2, y - 22, largeur, 46, () => (p.fiches = [t]));
   });
 }
@@ -798,7 +801,7 @@ function fiche(type: TypeTour, j: Jeu): void {
   ctx.setLineDash([3, 5]);
   symbole(ctx, f.glyphe, W / 2, y + 178, 52, "rgba(60,62,75,0.3)", 2);
   ctx.restore();
-  symbole(ctx, f.glyphe, W / 2, y + 178, 52, BLEU, 3.5, avance);
+  symbole(ctx, f.glyphe, W / 2, y + 178, 52, STYLOS[type], 3.5, avance);
   paragraphe(ctx, "Dessine ce symbole en PETIT (moins de 2 cm) là où tu veux la tour.", W / 2, y + 256, w - 40, { taille: 16 });
   ecrire(ctx, `${coutPose(j, type)} d'encre`, W / 2, y + 318, { taille: 20, couleur: BLEU });
   ecrire(ctx, "touche pour continuer", W / 2, y + h - 18, { taille: 13, couleur: CRAYON });

@@ -4,7 +4,7 @@ import type { V } from "../sim/geom";
 import { modeleAffiche, type Glyphe } from "../sim/glyphes";
 import type { TypeTour } from "../sim/tours";
 import { hash3 } from "../sim/rng";
-import { BLEU, CRAYON, ROUGE, cercle, ecrire, hachures, rectangle, trait } from "./encre";
+import { BLEU, CRAYON, ROUGE, avecStylo, cercle, ecrire, hachures, rectangle, trait } from "./encre";
 
 /** Les dessins de la trousse : des traits dans [-1, 1], par type de tour. */
 let apparences: Partial<Record<TypeTour, V[][]>> = {};
@@ -54,7 +54,22 @@ function socle(type: TypeTour, x: number, y: number, rot: number): V[] {
   }
 }
 
+/** La couleur du stylo de chaque famille : on reconnaît une tour d'un coup d'œil, même de loin. */
+export const STYLOS: Record<TypeTour, string> = {
+  plume: BLEU,
+  roquette: "#26262e",
+  foudre: "#5b3a9e",
+  correction: "#1d3a8a",
+  spirale: "#1e7a4f",
+  scie: "#3a3a44",
+  encrier: "#13708a",
+};
+
 export function dessinerTour(ctx: CanvasRenderingContext2D, v: VueTour): void {
+  avecStylo(STYLOS[v.type], () => dessinerTourAuStylo(ctx, v));
+}
+
+function dessinerTourAuStylo(ctx: CanvasRenderingContext2D, v: VueTour): void {
   const { x, y, temps } = v;
   const g = (v.id ?? 1) * 13;
   const tic = Math.floor(temps * 8);

@@ -317,6 +317,8 @@ export interface Brouillon {
   geste: string;
   /** Le pouvoir armé : le trait le dessine au lieu d'un geste. */
   pouvoir?: Pouvoir | null;
+  /** La couleur du stylo de la tour reconnue, en direct. */
+  couleur?: string;
 }
 
 export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillon | null, selection: Tour | null): void {
@@ -625,7 +627,7 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
       trait(ctx, pts, { couleur: "#c97a86", epaisseur: 2, amp: 0.4, graine: 7, alpha: 0.6 });
     }
   } else if (brouillon && brouillon.pts.length > 1) {
-    const couleur = brouillon.geste === "rien" ? CRAYON : BLEU;
+    const couleur = brouillon.geste === "rien" ? CRAYON : brouillon.couleur ?? BLEU;
     trait(ctx, brouillon.pts, { couleur, epaisseur: brouillon.geste === "mur" ? 3.5 : 2.4, amp: 0.4, graine: 7 });
   }
 }

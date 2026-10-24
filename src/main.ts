@@ -7,6 +7,7 @@ import * as musique from "./musique";
 import { ENNEMIS } from "./sim/ennemis";
 import { regler } from "./render/encre";
 import { papier } from "./render/papier";
+import { bureau, coinCorne, dessous } from "./render/bureau";
 import { ameliorer, blesser, choisirFourniture, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
@@ -27,6 +28,9 @@ let ox = 0;
 let oy = 0;
 let dpr = 1;
 let fond: HTMLCanvasElement | null = null;
+let table: HTMLCanvasElement | null = null;
+/** Le bord de bureau qu'on laisse voir autour du cahier, même sur un téléphone. */
+const MARGE = 6;
 
 function redimensionner(): void {
   dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -34,10 +38,11 @@ function redimensionner(): void {
   const ch = window.innerHeight;
   canvas.width = Math.round(cw * dpr);
   canvas.height = Math.round(ch * dpr);
-  echelle = Math.min(cw / W, ch / H);
+  echelle = Math.min((cw - MARGE * 2) / W, (ch - MARGE * 2) / H);
   ox = (cw - W * echelle) / 2;
   oy = (ch - H * echelle) / 2;
   fond = papier(W, H, echelle * dpr, "seyes");
+  table = bureau(canvas.width, canvas.height, { x: ox * dpr, y: oy * dpr, w: W * echelle * dpr, h: H * echelle * dpr });
 }
 
 function versPage(e: PointerEvent): { x: number; y: number } {
@@ -193,11 +198,9 @@ function image(maintenant: number): void {
   const ctx = ui.ctx;
   ui.boutons = [];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = "#e4d9bf";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (table) ctx.drawImage(table, 0, 0);
   ctx.setTransform(dpr * echelle, 0, 0, dpr * echelle, ox * dpr, oy * dpr);
-  ctx.fillStyle = "rgba(80,60,30,0.18)";
-  ctx.fillRect(3, 4, W, H);
+  dessous(ctx, W, H, nav.ecran === "partie" ? partie?.page?.cahier ?? 2 : 1);
   if (nav.ecran === "partie" && partie) dessinerPartie(echelle * dpr);
   else {
     if (fond) ctx.drawImage(fond, 0, 0, W, H);
@@ -209,6 +212,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "reglages") dessinerReglages();
   }
   dessinerAppui();
+  coinCorne(ctx, W, H);
   tournerPage();
   requestAnimationFrame(image);
 }
