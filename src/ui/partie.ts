@@ -2,7 +2,7 @@
 import * as audio from "../audio";
 import * as fx from "../render/fx";
 import { vibrer } from "../vibre";
-import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, rectangle, trait } from "../render/encre";
+import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, paragraphe, boite, feuille, ligne, trait } from "../render/encre";
 import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
@@ -431,14 +431,13 @@ export function dessinerPartie(v: Vue): void {
   const conseil = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : astuce(p);
   if (conseil && !p.trace) {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
-    ctx.fillStyle = "rgba(246,239,220,0.85)";
-    ctx.fillRect(20, y - 22, W - 40, 44);
+    feuille(ctx, 20, y - 22, W - 40, 44, "rgba(246,239,220,0.88)", 41, 0);
     paragraphe(ctx, conseil, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
   }
   let encre = { x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 };
   if (portrait) {
-    trait(ctx, [{ x: 0, y: HAUT }, { x: W, y: HAUT }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 80 });
-    trait(ctx, [{ x: 0, y: HAUT + PAGE_H }, { x: W, y: HAUT + PAGE_H }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 81 });
+    ligne(ctx, { x: 4, y: HAUT }, { x: W - 4, y: HAUT }, { couleur: CRAYON, epaisseur: 1.1, graine: 80 });
+    ligne(ctx, { x: 4, y: HAUT + PAGE_H }, { x: W - 4, y: HAUT + PAGE_H }, { couleur: CRAYON, epaisseur: 1.1, graine: 81 });
     bandeauHaut(p);
     bandeauBas(p);
   } else {
@@ -576,7 +575,7 @@ function choixFournitures(p: Partie, choix: Fourniture[]): void {
     ctx.moveTo(0, 30);
     ctx.lineTo(w, 30);
     ctx.stroke();
-    if (f.pacte) rectangle(ctx, 2, 2, w - 4, h - 4, { couleur: ROUGE, epaisseur: 2.2, graine: 300 + i });
+    if (f.pacte) boite(ctx, 2, 2, w - 4, h - 4, { couleur: ROUGE, epaisseur: 2.2, graine: 300 + i });
     iconeFourniture(ctx, f, 38, 74);
     ecrire(ctx, f.nom, 76, 18, { align: "left", police: "titre", taille: 24, couleur: f.pacte ? ROUGE : BLEU });
     paragraphe(ctx, f.texte, 76 + (w - 96) / 2, 56, w - 96, { taille: 15, couleur: f.pacte ? ROUGE : "#3d3f4a" });
@@ -805,22 +804,23 @@ function carteAttente(p: Partie, sansBouton = false): void {
 /** Une fiche bristol scotchée : blanche, lignée de bleu, ligne rouge en haut, deux bouts de scotch aux coins. */
 function bristol(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   ctx.save();
-  ctx.fillStyle = "rgba(40,30,10,0.16)";
-  ctx.fillRect(x + 3, y + 5, w, h);
-  ctx.fillStyle = "#fffdf6";
-  ctx.fillRect(x, y, w, h);
+  // Scotchée un peu de travers, comme on la colle d'une main
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(((Math.round(x + w) % 7) - 3) * 0.0025);
+  ctx.translate(-x - w / 2, -y - h / 2);
+  feuille(ctx, x, y, w, h, "#fffdf6", Math.round(w + h));
   ctx.strokeStyle = "rgba(90,130,200,0.3)";
   ctx.lineWidth = 1;
-  for (let l = y + 52; l < y + h; l += 18) {
+  for (let l = y + 52; l < y + h - 2; l += 18) {
     ctx.beginPath();
-    ctx.moveTo(x, l);
-    ctx.lineTo(x + w, l);
+    ctx.moveTo(x + 1, l);
+    ctx.lineTo(x + w - 1, l);
     ctx.stroke();
   }
   ctx.strokeStyle = "rgba(196,48,43,0.55)";
   ctx.beginPath();
-  ctx.moveTo(x, y + 32);
-  ctx.lineTo(x + w, y + 32);
+  ctx.moveTo(x + 1, y + 32);
+  ctx.lineTo(x + w - 1, y + 32);
   ctx.stroke();
   for (const [sx, a] of [[x + 8, -0.6], [x + w - 8, 0.6]] as const) {
     ctx.save();
@@ -929,7 +929,7 @@ function bande(p: Partie): { x: number; y: number } {
   const w = BANDE;
   // Le trait qui sépare la bande de la carte, du côté de la carte
   const bord = reglages.gaucher ? w - 1 : 1;
-  trait(ctx, [{ x: bord, y: 4 }, { x: bord, y: PAGE_H - 4 }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 82 });
+  ligne(ctx, { x: bord, y: 6 }, { x: bord, y: PAGE_H - 6 }, { couleur: CRAYON, epaisseur: 1.1, graine: 82 });
   bouton(8, 8, 40, 34, "II", () => mettrePause(p, true), { taille: 17 });
   bouton(54, 8, 40, 34, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
@@ -983,7 +983,7 @@ function panneau(p: Partie): { x: number; y: number } {
   ecrire(ctx, "vague", x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
   ecrire(ctx, `${Math.max(1, j.vague)}${total}`, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
   compteurEncre(p, x0 + 236, 86, 36, x0 + 262, 116);
-  trait(ctx, [{ x: x0 - 10, y: 128 }, { x: droite, y: 128 }], { couleur: CRAYON, epaisseur: 1, amp: 0.4, graine: 83 });
+  ligne(ctx, { x: x0 - 10, y: 128 }, { x: droite, y: 128 }, { couleur: CRAYON, epaisseur: 1.1, graine: 83 });
   // La vague qui vient : qui, combien, et comment les prendre
   let y = 150;
   if (j.phase === "attente") {
@@ -1038,7 +1038,7 @@ function panneau(p: Partie): { x: number; y: number } {
   });
   // Les gestes, pour mémoire
   y = 624;
-  trait(ctx, [{ x: x0 - 10, y: y - 14 }, { x: droite, y: y - 14 }], { couleur: CRAYON, epaisseur: 1, amp: 0.4, graine: 84 });
+  ligne(ctx, { x: x0 - 10, y: y - 14 }, { x: droite, y: y - 14 }, { couleur: CRAYON, epaisseur: 1.1, graine: 84 });
   const g = gestesPermis(j);
   const gestes = [
     g.mur && ["trait lent", "un mur"],
@@ -1130,9 +1130,8 @@ function menuTour(p: Partie, t: Tour): void {
   ctx.scale(0.3 + 0.7 * k, 0.3 + 0.7 * k);
   ctx.translate(-ox, -oy);
   ctx.globalAlpha = Math.min(1, ouvre * 3);
-  ctx.fillStyle = "rgba(255,252,240,0.96)";
-  ctx.fillRect(x, y, w, h);
-  rectangle(ctx, x, y, w, h, { epaisseur: 2, graine: 120 });
+  feuille(ctx, x, y, w, h, "rgba(255,252,240,0.97)", 120);
+  boite(ctx, x, y, w, h, { epaisseur: 2, graine: 120 });
   const titre = t.spec ? f.specs[t.spec - 1].nom : f.nom;
   ecrire(ctx, titre, x + 14, y + 22, { align: "left", police: "titre", taille: 28 });
   ecrire(ctx, t.spec ? `${f.nom} · spécialisée` : `niveau ${t.niveau}/3`, x + 14, y + 46, { align: "left", taille: 13, couleur: CRAYON });
@@ -1184,9 +1183,8 @@ function fiche(type: TypeTour, j: Jeu): void {
   const y = 200;
   const w = W - 60;
   const h = 380;
-  ctx.fillStyle = "rgba(255,252,240,0.97)";
-  ctx.fillRect(x, y, w, h);
-  rectangle(ctx, x, y, w, h, { epaisseur: 2.2, graine: 150 });
+  feuille(ctx, x, y, w, h, "rgba(255,252,240,0.98)", 150);
+  boite(ctx, x, y, w, h, { epaisseur: 2.2, graine: 150 });
   const nouvelle = !sauvegarde.appris.includes(type);
   if (nouvelle) ecrire(ctx, "nouvelle tour !", x + w - 20, y + 22, { align: "right", taille: 15, couleur: ROUGE, rotation: 0.08 });
   ecrire(ctx, f.nom, W / 2, y + 44, { police: "titre", taille: 40 });
@@ -1346,8 +1344,8 @@ function dessinerFin(p: Partie): void {
       ctx.translate(W / 2, 250);
       ctx.rotate(-0.18);
       ctx.scale(1 + chute * 1.8, 1 + chute * 1.8);
-      rectangle(ctx, -78, -24, 156, 48, { couleur: ROUGE, epaisseur: 3.5, graine: 181 });
-      rectangle(ctx, -72, -19, 144, 38, { couleur: ROUGE, epaisseur: 1.2, graine: 182 });
+      boite(ctx, -78, -24, 156, 48, { couleur: ROUGE, epaisseur: 3.5, graine: 181 });
+      boite(ctx, -72, -19, 144, 38, { couleur: ROUGE, epaisseur: 1.2, graine: 182 });
       ecrire(ctx, "À REFAIRE", 0, 1, { police: "titre", taille: 34, couleur: ROUGE });
       ctx.restore();
     }
@@ -1357,7 +1355,7 @@ function dessinerFin(p: Partie): void {
   ctx.restore();
   if (p.record) ecrire(ctx, "record !", W / 2 + 120, 175, { couleur: ROUGE, taille: 18, rotation: 0.3 });
   if (p.message) {
-    rectangle(ctx, 40, 278, W - 80, 44, { couleur: ROUGE, epaisseur: 1.8, graine: 170 });
+    boite(ctx, 40, 278, W - 80, 44, { couleur: ROUGE, epaisseur: 1.8, graine: 170 });
     ecrire(ctx, p.message, W / 2, 300, { taille: 17, couleur: ROUGE });
   }
   const precision = j.stats.ratures ? Math.round((100 * (j.stats.ratures - j.stats.ratees)) / j.stats.ratures) : 0;

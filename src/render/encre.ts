@@ -37,6 +37,8 @@ export interface Trait {
   alpha?: number;
   /** Remplissage (couleur) en plus du trait. */
   fond?: string;
+  /** Faux : pas de petit pâté au départ (les côtés d'une boîte n'en ont qu'un). */
+  pate?: boolean;
 }
 
 /** Un tracé au stylo par une suite de points. */
@@ -71,7 +73,7 @@ export function trait(ctx: CanvasRenderingContext2D, pts: V[], o: Trait = {}): v
     ctx.lineWidth = w * 0.32;
     ctx.stroke();
     // Et parfois un petit pâté au départ, là où la bille s'est posée (fixe, pour ne pas clignoter)
-    if (!o.ferme && hash3(g, 97, 0) < 0.45) {
+    if (!o.ferme && o.pate !== false && hash3(g, 97, 0) < 0.45) {
       ctx.fillStyle = couleur;
       ctx.beginPath();
       ctx.arc(pts[0].x, pts[0].y, w * 0.62, 0, Math.PI * 2);
@@ -181,4 +183,94 @@ export function paragraphe(ctx: CanvasRenderingContext2D, texte: string, x: numb
   const h = taille * 1.2;
   lignes.forEach((li, i) => ecrire(ctx, li, x, y + i * h, { ...o, base: "top" }));
   return lignes.length * h;
+}
+
+// --- L'interface à main levée ---
+// Les boutons, les cadres et les cartes ne sont pas tirés à la règle : chaque côté est un coup de stylo un peu bombé,
+// qui dépasse des coins, et le papier qu'ils entourent n'est pas tout à fait rectangle. Tout dépend de la graine :
+// la forme ne bouge pas d'une image à l'autre, seul le tremblé du stylo vit.
+
+const alea = (g: number, i: number) => hash3(g, i, 7) - 0.5;
+
+/** Les quatre coins d'une boîte dessinée à main levée, un peu déplacés. */
+function coinsMain(x: number, y: number, w: number, h: number, g: number): V[] {
+  const d = Math.min(2.6, Math.min(w, h) * 0.07);
+  // Une boîte n'est jamais tout à fait d'aplomb : un degré de travers au plus
+  const a = alea(g, 9) * 0.035;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const tourner = (px: number, py: number): V => ({ x: cx + (px - cx) * Math.cos(a) - (py - cy) * Math.sin(a), y: cy + (px - cx) * Math.sin(a) + (py - cy) * Math.cos(a) });
+  return [
+    tourner(x + alea(g, 1) * d, y + alea(g, 2) * d),
+    tourner(x + w + alea(g, 3) * d, y + alea(g, 4) * d),
+    tourner(x + w + alea(g, 5) * d, y + h + alea(g, 6) * d),
+    tourner(x + alea(g, 7) * d, y + h + alea(g, 8) * d),
+  ];
+}
+
+/** Un côté : de a vers b, bombé d'un côté ou de l'autre, avec une petite ondulation de la main. */
+function coteMain(a: V, b: V, g: number, avant = 0, apres = 0): V[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l = Math.hypot(dx, dy) || 1;
+  const ux = dx / l;
+  const uy = dy / l;
+  const bombe = alea(g, 11) * 2 * Math.min(4, l * 0.02);
+  const onde = Math.min(0.6, l * 0.004);
+  const phase = hash3(g, 12, 7) * 6.28;
+  const n = Math.max(3, Math.round(l / 14));
+  const pts: V[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const s = -avant + t * (l + avant + apres);
+    const k = s / l;
+    const off = bombe * Math.sin(Math.PI * Math.min(1, Math.max(0, k))) + onde * Math.sin(phase + k * 9);
+    pts.push({ x: a.x + ux * s - uy * off, y: a.y + uy * s + ux * off });
+  }
+  return pts;
+}
+
+/** Le contour du papier d'une boîte (pour le remplir sans angle droit parfait). */
+function contourMain(c: V[], g: number): V[] {
+  return [0, 1, 2, 3].flatMap((i) => coteMain(c[i], c[(i + 1) % 4], g + i * 13).slice(0, -1));
+}
+
+function remplir(ctx: CanvasRenderingContext2D, pts: V[], couleur: string): void {
+  ctx.fillStyle = couleur;
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Une boîte à main levée : quatre coups de stylo qui débordent un peu aux coins. */
+export function boite(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, o: Trait = {}): void {
+  const g = o.graine ?? 1;
+  const c = coinsMain(x, y, w, h, g);
+  if (o.fond) remplir(ctx, contourMain(c, g), stylo && o.fond === BLEU ? stylo : o.fond);
+  // Le dépassement aux coins : franc sur une grande boîte, discret sur une petite case
+  const dep = Math.min(5, Math.min(w, h) * 0.09);
+  for (let i = 0; i < 4; i++) {
+    const avant = (0.2 + hash3(g, 20 + i, 7) * 0.8) * dep * (i === 0 ? 0.3 : 1);
+    const apres = (0.1 + hash3(g, 30 + i, 7) * 0.9) * dep;
+    trait(ctx, coteMain(c[i], c[(i + 1) % 4], g + i * 13, avant, apres), { amp: 0.35, ...o, fond: undefined, ferme: false, graine: g + i * 13, pate: i === 0 });
+  }
+  // Un trait appuyé (bouton principal, cadre important) : on repasse par-dessus, pas tout à fait au même endroit
+  if ((o.epaisseur ?? 2) >= 2.2 && Math.min(w, h) > 24) {
+    const c2 = coinsMain(x, y, w, h, g + 101);
+    for (let i = 0; i < 4; i++) trait(ctx, coteMain(c2[i], c2[(i + 1) % 4], g + 101 + i * 13), { amp: 0.35, ...o, fond: undefined, ferme: false, epaisseur: (o.epaisseur ?? 2) * 0.45, alpha: (o.alpha ?? 1) * 0.6, graine: g + 101 + i * 13, pate: false });
+  }
+}
+
+/** Une feuille de papier (carte, fiche, menu) : son ombre portée, puis le papier, aux bords pas tout à fait droits. */
+export function feuille(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, couleur: string, graine: number, ombre = 0.16): void {
+  const c = coinsMain(x, y, w, h, graine);
+  const contour = contourMain(c, graine);
+  if (ombre > 0) remplir(ctx, contour.map((p) => ({ x: p.x + 3, y: p.y + 5 })), `rgba(40,30,10,${ombre})`);
+  remplir(ctx, contour, couleur);
+}
+
+/** Une ligne à main levée (un séparateur, un souligné long) : bombée, ondulée, jamais à la règle. */
+export function ligne(ctx: CanvasRenderingContext2D, a: V, b: V, o: Trait = {}): void {
+  trait(ctx, coteMain(a, b, o.graine ?? 1), { amp: 0.3, ...o });
 }

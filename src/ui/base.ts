@@ -1,6 +1,6 @@
 // Ce que partagent tous les écrans : la mise en page, les boutons (refaits à chaque image), quelques éléments dessinés.
 import * as audio from "../audio";
-import { BLEU, CRAYON, ROUGE, ecrire, rectangle, trait } from "../render/encre";
+import { BLEU, CRAYON, ROUGE, ecrire, boite, trait } from "../render/encre";
 
 export const W = 400;
 /** Bandeau du haut, page (720), bandeau du bas (encre et pense-bête). */
@@ -64,7 +64,7 @@ export interface OptionsBouton {
 export function bouton(x: number, y: number, w: number, h: number, texte: string, action: () => void, o: OptionsBouton = {}): void {
   const ctx = ui.ctx;
   const couleur = o.inactif ? CRAYON : o.couleur ?? (o.principal ? ROUGE : BLEU);
-  rectangle(ctx, x, y, w, h, { couleur, epaisseur: o.principal ? 2.4 : 1.8, graine: Math.round(x * 7 + y), fond: "rgba(246,239,220,0.94)" });
+  boite(ctx, x, y, w, h, { couleur, epaisseur: o.principal ? 2.4 : 1.8, graine: Math.round(x * 7 + y), fond: "rgba(246,239,220,0.94)" });
   if (o.sous) {
     ecrire(ctx, texte, x + w / 2, y + h / 2 - 8, { couleur, taille: o.taille ?? 22 });
     ecrire(ctx, o.sous, x + w / 2, y + h / 2 + 13, { couleur: CRAYON, taille: 13 });

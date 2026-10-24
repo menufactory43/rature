@@ -1,6 +1,6 @@
 // La trousse : on repasse le pochoir d'une tour au doigt, la prof tamponne « ACCEPTÉ », et ce dessin devient
 // l'apparence de la tour en jeu. Purement esthétique.
-import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, rectangle, trait } from "../render/encre";
+import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, boite, trait } from "../render/encre";
 import { dessinerTour, reglerApparences } from "../render/tours";
 import type { V } from "../sim/geom";
 import { TOURS, TYPES_TOURS, type TypeTour } from "../sim/tours";
@@ -59,7 +59,7 @@ export function dessinerTrousse(): void {
       const x = 70 + (i % 3) * 130;
       const y = 190 + Math.floor(i / 3) * 150;
       const ok = debloquees.includes(t);
-      rectangle(ctx, x - 52, y - 52, 104, 128, { couleur: ok ? BLEU : CRAYON, epaisseur: 1.6, graine: 400 + i, fond: "rgba(255,252,240,0.85)" });
+      boite(ctx, x - 52, y - 52, 104, 128, { couleur: ok ? BLEU : CRAYON, epaisseur: 1.6, graine: 400 + i, fond: "rgba(255,252,240,0.85)" });
       if (ok) {
         ctx.save();
         ctx.translate(x, y);
@@ -77,7 +77,7 @@ export function dessinerTrousse(): void {
   const t = choisi;
   titre(TOURS[t].nom, 40, 40);
   paragraphe(ctx, "Repasse les pointillés au doigt, en autant de traits que tu veux. Ajoute ta touche : tout ce que tu dessines dans le cadre compte.", W / 2, 80, 340, { taille: 14, couleur: CRAYON });
-  rectangle(ctx, CX - 150, CY - 150, 300, 300, { couleur: CRAYON, epaisseur: 1.4, graine: 450, fond: "rgba(255,255,255,0.5)" });
+  boite(ctx, CX - 150, CY - 150, 300, 300, { couleur: CRAYON, epaisseur: 1.4, graine: 450, fond: "rgba(255,255,255,0.5)" });
   ctx.save();
   ctx.setLineDash([4, 6]);
   for (const s of POCHOIRS[t]) trait(ctx, s.map((p) => ({ x: CX + p.x * ECHELLE, y: CY + p.y * ECHELLE })), { couleur: "rgba(60,62,75,0.45)", epaisseur: 2, amp: 0 });
@@ -88,7 +88,7 @@ export function dessinerTrousse(): void {
   if (accepte && ui.temps - accepte < 1.6) {
     ctx.save();
     ctx.globalAlpha = Math.min(1, (1.6 - (ui.temps - accepte)) * 2);
-    rectangle(ctx, CX - 90, CY - 30, 180, 56, { couleur: ROUGE, epaisseur: 3, graine: 460 });
+    boite(ctx, CX - 90, CY - 30, 180, 56, { couleur: ROUGE, epaisseur: 3, graine: 460 });
     ecrire(ctx, "ACCEPTÉ", CX, CY - 1, { police: "titre", taille: 40, couleur: ROUGE, rotation: -0.12 });
     ctx.restore();
   } else if (accepte) {

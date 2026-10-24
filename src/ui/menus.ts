@@ -1,5 +1,5 @@
 // Les écrans hors partie : le titre, l'aide, les cahiers de la campagne, les talents.
-import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, rectangle, trait } from "../render/encre";
+import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, boite, feuille, trait } from "../render/encre";
 import { monstre } from "../render/monstres";
 import { coeur } from "../render/scene";
 import { dessinerTour, symbole } from "../render/tours";
@@ -216,7 +216,7 @@ export function dessinerCampagne(): void {
     const y = 186 + i * 92;
     const ouverte = pageOuverte(p);
     const choisie = pageChoisie === p;
-    rectangle(ctx, 24, y, W - 48, 80, { couleur: ouverte ? (choisie ? ROUGE : BLEU) : CRAYON, epaisseur: choisie ? 2.4 : 1.6, graine: 200 + i, fond: "rgba(255,252,240,0.9)" });
+    boite(ctx, 24, y, W - 48, 80, { couleur: ouverte ? (choisie ? ROUGE : BLEU) : CRAYON, epaisseur: choisie ? 2.4 : 1.6, graine: 200 + i, fond: "rgba(255,252,240,0.9)" });
     miniature(ctx, p, 32, y + 7, 36, 66, ouverte);
     ecrire(ctx, `${p.id}  ${p.nom}`, 80, y + 24, { align: "left", police: "titre", taille: 24, couleur: ouverte ? BLEU : CRAYON });
     const n = sauvegarde.etoiles[p.id] ?? 0;
@@ -230,8 +230,7 @@ export function dessinerCampagne(): void {
   if (pageChoisie) {
     const p = pageChoisie;
     const y = H - 210;
-    ctx.fillStyle = "rgba(246,239,220,0.95)";
-    ctx.fillRect(10, y - 10, W - 20, 140);
+    feuille(ctx, 10, y - 10, W - 20, 140, "rgba(246,239,220,0.96)", 77, 0.1);
     bouton(24, y, W - 48, 54, `Jouer ${p.id}`, () => actions.jouerPage(p, "campagne"), { principal: true, taille: 22 });
     const gagnee = pageGagnee(p.id);
     bouton(24, y + 64, (W - 60) / 2, 54, "Défi", () => actions.jouerPage(p, "defi"), { inactif: !gagnee, taille: 18, sous: gagnee ? TEXTE_DEFI[p.defi].toLowerCase() : "gagne la page d'abord" });
@@ -256,7 +255,7 @@ export function dessinerTalents(): void {
     const y = 148 + i * 74;
     ecrire(ctx, f.nom, 44, y, { align: "left", taille: 19 });
     ecrire(ctx, f.texte + " par point", 44, y + 22, { align: "left", taille: 13, couleur: CRAYON });
-    for (let k = 0; k < f.max; k++) rectangle(ctx, 236 + k * 18, y - 6, 12, 12, { couleur: k < n ? ROUGE : CRAYON, fond: k < n ? "rgba(196,48,43,0.6)" : undefined, epaisseur: 1.4, graine: 300 + i * 5 + k });
+    for (let k = 0; k < f.max; k++) boite(ctx, 236 + k * 18, y - 6, 12, 12, { couleur: k < n ? ROUGE : CRAYON, fond: k < n ? "rgba(196,48,43,0.6)" : undefined, epaisseur: 1.4, graine: 300 + i * 5 + k });
     bouton(W - 102, y - 14, 36, 32, "−", () => {
       if (n > 0) {
         sauvegarde.talents[id] = n - 1;

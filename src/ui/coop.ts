@@ -1,6 +1,6 @@
 // L'écran « À deux » : créer un salon (on reçoit un code de 4 lettres à donner), ou rejoindre celui d'un ami en tapant
 // son code sur un clavier dessiné. L'hôte choisit la page et lance la partie quand son binôme est là.
-import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, rectangle } from "../render/encre";
+import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, boite } from "../render/encre";
 import { ALPHABET, tirerCode } from "../coop/lien";
 import { choixPossibles, coop, creer, lancer, quitter, rejoindre } from "../coop/session";
 import { bouton, titre, ui, W, H } from "./base";
@@ -23,7 +23,7 @@ function cases(code: string, y: number, taille = 56): void {
   const x0 = W / 2 - (w * 4 + 12 * 3) / 2;
   for (let i = 0; i < 4; i++) {
     const x = x0 + i * (w + 12);
-    rectangle(ctx, x, y, w, w * 1.15, { epaisseur: 1.8, graine: 400 + i, fond: "rgba(255,252,240,0.9)" });
+    boite(ctx, x, y, w, w * 1.15, { epaisseur: 1.8, graine: 400 + i, fond: "rgba(255,252,240,0.9)" });
     if (code[i]) ecrire(ctx, code[i], x + w / 2, y + w * 0.6, { police: "titre", taille: w * 0.8, couleur: BLEU });
   }
 }

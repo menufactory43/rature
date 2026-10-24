@@ -5,7 +5,7 @@ import type { V } from "../sim/geom";
 import { positionLame, segmentRegle, stats, zoneGomme, type Ennemi, type Jeu, type Tour } from "../sim/jeu";
 import { hash3 } from "../sim/rng";
 import { PORTEE_INFINIE, RAYON_TOUR } from "../sim/tours";
-import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, pointsCercle, rectangle, trait } from "./encre";
+import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, pointsCercle, boite, rectangle, trait } from "./encre";
 import { dessinerSous, dessinerSur, echelleTour } from "./fx";
 import { monstre } from "./monstres";
 import { frottement, lasso, regle } from "./pouvoirs";
@@ -218,8 +218,8 @@ function cadre(ctx: CanvasRenderingContext2D, c: { x: number; y: number; w: numb
     ctx.stroke();
   }
   ctx.restore();
-  rectangle(ctx, c.x + m, c.y + m, c.w - m * 2, c.h - m * 2, { couleur: "rgba(60,62,75,0.7)", epaisseur: 1.4, amp: 0.2, graine: g });
-  rectangle(ctx, c.x + m + 3, c.y + m + 3, c.w - m * 2 - 6, c.h - m * 2 - 6, { couleur: "rgba(60,62,75,0.45)", epaisseur: 0.8, amp: 0.2, graine: g + 1 });
+  boite(ctx, c.x + m, c.y + m, c.w - m * 2, c.h - m * 2, { couleur: "rgba(60,62,75,0.7)", epaisseur: 1.4, amp: 0.2, graine: g });
+  boite(ctx, c.x + m + 3, c.y + m + 3, c.w - m * 2 - 6, c.h - m * 2 - 6, { couleur: "rgba(60,62,75,0.45)", epaisseur: 0.8, amp: 0.2, graine: g + 1 });
   // La consigne, à l'horizontale si la place le permet, sinon le long du cadre
   const texte = c.w >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : c.w >= 80 ? "NE RIEN ÉCRIRE" : "INTERDIT";
   ctx.save();
