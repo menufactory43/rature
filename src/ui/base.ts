@@ -15,13 +15,40 @@ export interface Bouton {
   w: number;
   h: number;
   action: () => void;
+  /** Faux pour une zone sans dessin (pas de surligneur quand on la touche). */
+  visible?: boolean;
 }
 
 export const ui = {
   ctx: null as unknown as CanvasRenderingContext2D,
   boutons: [] as Bouton[],
   temps: 0,
+  /** Le dernier bouton touché, pour le coup de surligneur. */
+  appui: null as (Bouton & { depuis: number }) | null,
 };
+
+/** Un coup de surligneur jaune sur le bouton qu'on vient de toucher. */
+export function dessinerAppui(): void {
+  const a = ui.appui;
+  if (!a) return;
+  const t = (ui.temps - a.depuis) / 0.35;
+  if (t >= 1) {
+    ui.appui = null;
+    return;
+  }
+  const ctx = ui.ctx;
+  ctx.save();
+  ctx.globalAlpha = 0.55 * (1 - t);
+  ctx.strokeStyle = "#f2d024";
+  ctx.lineWidth = Math.min(16, a.h * 0.5);
+  ctx.lineCap = "round";
+  const avance = Math.min(1, t * 5);
+  ctx.beginPath();
+  ctx.moveTo(a.x + 6, a.y + a.h * 0.58);
+  ctx.lineTo(a.x + 6 + (a.w - 12) * avance, a.y + a.h * 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
 
 export interface OptionsBouton {
   principal?: boolean;
@@ -44,7 +71,7 @@ export function bouton(x: number, y: number, w: number, h: number, texte: string
 
 /** Une zone touchable sans dessin. */
 export function zone(x: number, y: number, w: number, h: number, action: () => void): void {
-  ui.boutons.push({ x, y, w, h, action });
+  ui.boutons.push({ x, y, w, h, action, visible: false });
 }
 
 export function voile(alpha = 0.85): void {

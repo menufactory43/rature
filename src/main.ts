@@ -10,7 +10,7 @@ import { PAGES, optionsDePage, optionsPageDuJour, type Page } from "./sim/pages"
 import { TYPES_TOURS } from "./sim/tours";
 import { colleDebloquee, effacer, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { grainePageDuJour } from "./sauvegarde";
-import { H, W, ui } from "./ui/base";
+import { H, W, dessinerAppui, ui } from "./ui/base";
 import { actions, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
 import { avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
@@ -68,6 +68,7 @@ canvas.addEventListener("pointerdown", (e) => {
   for (let i = ui.boutons.length - 1; i >= 0; i--) {
     const b = ui.boutons[i];
     if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
+      if (b.visible !== false) ui.appui = { ...b, depuis: ui.temps };
       b.action();
       return;
     }
@@ -172,6 +173,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "talents") dessinerTalents();
     else if (nav.ecran === "trousse") dessinerTrousse();
   }
+  dessinerAppui();
   tournerPage();
   requestAnimationFrame(image);
 }

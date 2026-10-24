@@ -339,7 +339,8 @@ function carteAttente(p: Partie): void {
   ];
   let y = placeCarte.get(j) ?? HAUT + 10;
   let meilleur = placeCarte.has(j) ? -Infinity : Infinity;
-  for (let yy = 10; yy <= PAGE_H - h - 10; yy += 10) {
+  // En haut ou en bas seulement : le milieu de la page, c'est là qu'on construit
+  for (const yy of [10, PAGE_H - h - 10]) {
     const cout = poids.reduce((s, q) => s + (q.y > yy - 25 && q.y < yy + h + 25 ? q.k : 0), 0) + yy * 0.001;
     if (cout < meilleur) {
       meilleur = cout;
@@ -421,8 +422,12 @@ function bandeauBas(p: Partie): void {
   });
 }
 
+let menuOuvert: { t: Tour | null; depuis: number } = { t: null, depuis: 0 };
+
 function menuTour(p: Partie, t: Tour): void {
   const ctx = ui.ctx;
+  if (menuOuvert.t !== t) menuOuvert = { t, depuis: ui.temps };
+  const ouvre = Math.min(1, (ui.temps - menuOuvert.depuis) / 0.18);
   const j = p.jeu;
   const f = TOURS[t.type];
   const s = stats(t);
@@ -432,6 +437,15 @@ function menuTour(p: Partie, t: Tour): void {
   const y = t.y > PAGE_H / 2 ? HAUT + 8 : HAUT + PAGE_H - h - 8;
   zone(0, HAUT, W, PAGE_H, () => (p.selection = null));
   zone(x, y, w, h, () => {});
+  // Le menu se déplie depuis la tour, avec un petit rebond
+  const k = 1 - Math.exp(-ouvre * 6) * Math.cos(ouvre * 9);
+  ctx.save();
+  const ox = t.x;
+  const oy = HAUT + t.y;
+  ctx.translate(ox, oy);
+  ctx.scale(0.3 + 0.7 * k, 0.3 + 0.7 * k);
+  ctx.translate(-ox, -oy);
+  ctx.globalAlpha = Math.min(1, ouvre * 3);
   ctx.fillStyle = "rgba(255,252,240,0.96)";
   ctx.fillRect(x, y, w, h);
   rectangle(ctx, x, y, w, h, { epaisseur: 2, graine: 120 });
@@ -457,6 +471,7 @@ function menuTour(p: Partie, t: Tour): void {
   const bx2 = t.niveau === 3 && !t.spec ? x + 12 : x + 194;
   if (!f.passive) bouton(bx2, t.niveau === 3 && !t.spec ? by + 8 : by, 88, 50, "Cible", () => changerCible(t), { sous: t.cible, taille: 16 });
   bouton(x + w - 98, t.niveau === 3 && !t.spec ? by + 8 : by, 86, 50, "Vendre", () => vendre(j, t), { sous: `+${valeurRevente(t)}`, taille: 16 });
+  ctx.restore();
 }
 
 function decrireStats(type: TypeTour, s: ReturnType<typeof stats>): string {
