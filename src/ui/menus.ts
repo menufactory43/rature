@@ -182,6 +182,8 @@ function miniature(ctx: CanvasRenderingContext2D, p: Page, x: number, y: number,
     ctx.fillStyle = b.type === "tache" ? "rgba(28,38,80,0.8)" : b.type === "trou" ? "rgba(120,100,70,0.5)" : "rgba(150,100,50,0.3)";
     ctx.fillRect(x + b.x * k, y + b.y * k, 20 * k + 0.3, 20 * k + 0.3);
   }
+  ctx.fillStyle = "rgba(150,120,80,0.75)";
+  for (const o of c.objets) ctx.fillRect(x + o.x * k, y + o.y * k, o.w * k, o.h * k);
   ctx.fillStyle = ROUGE;
   for (const e of c.entrees) {
     ctx.beginPath();

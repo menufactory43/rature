@@ -9,6 +9,7 @@ import { BLEU, CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, pointsCercle, re
 import { dessinerSous, dessinerSur, echelleTour } from "./fx";
 import { monstre } from "./monstres";
 import { frottement, lasso, regle } from "./pouvoirs";
+import { objet } from "./objets";
 import type { Pouvoir } from "../sim/pouvoirs";
 import { dessinerTour } from "./tours";
 
@@ -16,6 +17,7 @@ import { dessinerTour } from "./tours";
 export function decor(ctx: CanvasRenderingContext2D, carte: Carte): void {
   griffonnages(ctx, carte);
   for (const c of carte.cadres) cadre(ctx, c);
+  for (const o of carte.objets) objet(ctx, o);
   const taches = carte.blocs.filter((b) => b.type === "tache");
   const trous = carte.blocs.filter((b) => b.type === "trou");
   const cafes = carte.blocs.filter((b) => b.type === "cafe");

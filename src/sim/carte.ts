@@ -16,6 +16,18 @@ const GROS = 20;
 
 export type Papier = "seyes" | "carreaux" | "portee";
 
+/** Les objets posés sur la page, qui bloquent comme une tache : G gomme, T trombone, R règle, K capuchon, B bonbon, S taille-crayon. */
+export type TypeObjet = "gomme" | "trombone" | "regle" | "capuchon" | "bonbon" | "taille";
+const LETTRES_OBJETS: Record<string, TypeObjet> = { G: "gomme", T: "trombone", R: "regle", K: "capuchon", B: "bonbon", S: "taille" };
+
+export interface Objet {
+  type: TypeObjet;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Bloc {
   x: number;
   y: number;
@@ -42,6 +54,7 @@ export interface Carte {
   interdit: Uint8Array;
   /** Les cadres, en pixels, pour les dessiner. */
   cadres: { x: number; y: number; w: number; h: number }[];
+  objets: Objet[];
   blocs: Bloc[];
 }
 
@@ -55,6 +68,7 @@ export function lireCarte(nom: string, texte: string, papier: Papier = "seyes"):
   const cafe = new Uint8Array(COLS * LIGNES);
   const interdit = new Uint8Array(COLS * LIGNES);
   const casesCadre = new Set<number>();
+  const casesObjets: Record<string, Set<number>> = {};
   const blocs: Bloc[] = [];
   const entreesCases: { c: number; l: number }[] = [];
   const coeurs: V[] = [];
@@ -68,13 +82,15 @@ export function lireCarte(nom: string, texte: string, papier: Papier = "seyes"):
       else if (ch === "o") { marquer(bloque); blocs.push({ x: c * GROS, y: l * GROS, type: "trou" }); }
       else if (ch === "~") { marquer(cafe); blocs.push({ x: c * GROS, y: l * GROS, type: "cafe" }); }
       else if (ch === "x") { marquer(interdit); casesCadre.add(l * 100 + c); }
+      else if (LETTRES_OBJETS[ch]) { marquer(bloque); (casesObjets[ch] ??= new Set()).add(l * 100 + c); }
       else if (ch === "E") entreesCases.push({ c, l });
       else if (ch === "C") coeurs.push({ x: c * GROS + GROS / 2, y: l * GROS + GROS / 2 });
     });
   });
   if (!coeurs.length) throw new Error(`${nom} : pas de Cœur`);
   const coeur = { x: coeurs.reduce((s, p) => s + p.x, 0) / coeurs.length, y: coeurs.reduce((s, p) => s + p.y, 0) / coeurs.length };
-  return { nom, papier, entrees: grouperEntrees(entreesCases), coeur, bloque, cafe, interdit, cadres: cadres(casesCadre), blocs };
+  return { nom, papier, entrees: grouperEntrees(entreesCases), coeur, bloque, cafe, interdit, cadres: cadres(casesCadre), blocs,
+    objets: Object.entries(casesObjets).flatMap(([ch, cases]) => cadres(cases).map((r) => ({ type: LETTRES_OBJETS[ch], ...r }))) };
 }
 
 /** Les cases « x » voisines forment un cadre ; on garde son rectangle englobant. */
