@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f6efdc"/>
+  <g stroke="rgba(80,120,190,0.25)" stroke-width="2">
+    <line x1="0" y1="96" x2="512" y2="96"/><line x1="0" y1="192" x2="512" y2="192"/><line x1="0" y1="288" x2="512" y2="288"/><line x1="0" y1="384" x2="512" y2="384"/>
+    <line x1="96" y1="0" x2="96" y2="512"/><line x1="224" y1="0" x2="224" y2="512"/><line x1="352" y1="0" x2="352" y2="512"/>
+  </g>
+  <line x1="60" y1="0" x2="60" y2="512" stroke="rgba(200,60,60,0.5)" stroke-width="4"/>
+  <g fill="none" stroke="#22408f" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="256" cy="270" r="92" stroke-width="16"/>
+    <circle cx="256" cy="270" r="54" stroke-width="10"/>
+    <path d="M256 270 L360 200" stroke-width="26"/>
+  </g>
+  <g fill="none" stroke="#c4302b" stroke-linecap="round" stroke-width="10">
+    <circle cx="400" cy="120" r="44"/>
+    <path d="M330 175 L470 70" stroke-width="16"/>
+  </g>
+  <g fill="#c4302b"><circle cx="386" cy="112" r="6"/><circle cx="414" cy="112" r="6"/></g>
+</svg>
