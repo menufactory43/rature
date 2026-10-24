@@ -57,7 +57,7 @@ export function dessinerAide(): void {
   titre("Comment jouer", 40, 40);
   ["Dessiner", "Tours", "Monstres"].forEach((nom, i) => bouton(20 + i * 122, 76, 114, 34, nom, () => (onglet = i), { taille: 17, principal: onglet === i }));
   if (onglet === 0) {
-    paragraphe(ctx, "Les monstres entrent par les flèches rouges et marchent vers le Cœur. Chaque monstre qui l'atteint te coûte des vies. Tout se paie en encre : elle revient lentement, et chaque monstre tué en rapporte.", W / 2, 128, 350, { taille: 15, couleur: CRAYON });
+    paragraphe(ctx, "Les monstres entrent par les flèches rouges et marchent vers le Cœur. Chaque monstre qui l'atteint te coûte des vies. Tout se paie en encre : elle revient lentement, et chaque monstre tué en rapporte.", W / 2 + 8, 128, 330, { taille: 15, couleur: CRAYON });
     const lignes: [string, string][] = [
       ["Petit symbole : une TOUR", "Un cercle, un triangle, un éclair… dessiné en petit, là où tu veux la tour. Touche une tour pour l'améliorer ou la vendre."],
       ["Grand trait lent : un MUR", "La horde le contourne… ou le ronge, si c'est plus court. Construis des labyrinthes."],
@@ -66,8 +66,8 @@ export function dessinerAide(): void {
     ];
     lignes.forEach(([t, d], i) => {
       const y = 240 + i * 96;
-      ecrire(ctx, t, 30, y, { align: "left", taille: 19 });
-      paragraphe(ctx, d, 30, y + 14, 340, { align: "left", taille: 14, couleur: CRAYON });
+      ecrire(ctx, t, 44, y, { align: "left", taille: 19 });
+      paragraphe(ctx, d, 44, y + 14, 330, { align: "left", taille: 14, couleur: CRAYON });
     });
     paragraphe(ctx, "Enfermer complètement la horde ? Elle s'attaque alors à tes tours. Le chemin qu'elle prendra est tracé au crayon.", W / 2, 640, 340, { taille: 14, couleur: ROUGE });
   } else if (onglet === 1) {
@@ -154,8 +154,8 @@ export function dessinerTalents(): void {
     const f = TALENTS[id];
     const n = sauvegarde.talents[id] ?? 0;
     const y = 148 + i * 74;
-    ecrire(ctx, f.nom, 24, y, { align: "left", taille: 19 });
-    ecrire(ctx, f.texte + " par point", 24, y + 22, { align: "left", taille: 13, couleur: CRAYON });
+    ecrire(ctx, f.nom, 44, y, { align: "left", taille: 19 });
+    ecrire(ctx, f.texte + " par point", 44, y + 22, { align: "left", taille: 13, couleur: CRAYON });
     for (let k = 0; k < f.max; k++) rectangle(ctx, 236 + k * 18, y - 6, 12, 12, { couleur: k < n ? ROUGE : CRAYON, fond: k < n ? "rgba(196,48,43,0.6)" : undefined, epaisseur: 1.4, graine: 300 + i * 5 + k });
     bouton(W - 102, y - 14, 36, 32, "−", () => {
       if (n > 0) {

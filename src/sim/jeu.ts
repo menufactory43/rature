@@ -447,9 +447,9 @@ function recalculer(j: Jeu): void {
 
 export function ajouterEnnemi(j: Jeu, type: TypeEnnemi, x: number, y: number, vague = j.vague): Ennemi {
   const f = ENNEMIS[type];
-  const pv = f.pv * echellePv(Math.max(1, vague)) * (Number.isFinite(j.regles.total) ? 1 : 1 + Math.max(0, vague - 20) * 0.04);
+  const pv = f.pv * j.regles.difficulte * echellePv(Math.max(1, vague)) * (Number.isFinite(j.regles.total) ? 1 : 1 + Math.max(0, vague - 20) * 0.04);
   const e: Ennemi = {
-    id: j.prochainId++, type, x, y, vx: 0, vy: 0, pv, pvMax: pv, bouclier: (f.bouclier ?? 0) * echellePv(Math.max(1, vague)), r: f.rayon,
+    id: j.prochainId++, type, x, y, vx: 0, vy: 0, pv, pvMax: pv, bouclier: (f.bouclier ?? 0) * j.regles.difficulte * echellePv(Math.max(1, vague)), r: f.rayon,
     age: 0, zig: (j.prochainId * 1.7) % 6.28, bloque: false, englue: 0, etourdi: 0, marque: 0, revele: 0, acide: 0, ralenti: 0,
     mort: false, ponte: 2, touche: 0,
   };

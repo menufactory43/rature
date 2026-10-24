@@ -41,7 +41,7 @@ export const estVagueBoss = (r: ReglesVagues, n: number) => !!r.boss && (Number.
 export function planifier(r: ReglesVagues, n: number): PlanVague {
   const rng = new Rng(r.graine ^ Math.imul(n, 0x9e3779b1));
   const boss = estVagueBoss(r, n) ? r.boss : undefined;
-  let reste = budget(n) * r.difficulte * (boss ? 0.5 : 1);
+  let reste = budget(n) * (boss ? 0.5 : 1);
   const dispo = r.pool.filter((t, i) => premiereVague(r, i) <= n && ENNEMIS[t].cout > 0);
   const nouveaux = r.pool.filter((_, i) => premiereVague(r, i) === n);
   const duree = Math.min(28, 10 + n * 0.8);

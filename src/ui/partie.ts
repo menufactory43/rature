@@ -5,7 +5,7 @@ import { monstre } from "../render/monstres";
 import { papier } from "../render/papier";
 import { decor, scene, type Brouillon } from "../render/scene";
 import { symbole } from "../render/tours";
-import { ENNEMIS } from "../sim/ennemis";
+import { ENNEMIS, type TypeEnnemi } from "../sim/ennemis";
 import { polylineLength, truncate } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
@@ -253,6 +253,13 @@ export function dessinerPartie(echelle: number): void {
   }
   ctx.restore();
   if (j.phase === "attente") carteAttente(p);
+  const conseil = astuce(p);
+  if (conseil && !p.trace) {
+    const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
+    ctx.fillStyle = "rgba(246,239,220,0.85)";
+    ctx.fillRect(20, y - 22, W - 40, 44);
+    paragraphe(ctx, conseil, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
+  }
   trait(ctx, [{ x: 0, y: HAUT }, { x: W, y: HAUT }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 80 });
   trait(ctx, [{ x: 0, y: HAUT + PAGE_H }, { x: W, y: HAUT + PAGE_H }], { couleur: CRAYON, epaisseur: 1, amp: 0.3, graine: 81 });
   bandeauHaut(p);
@@ -261,6 +268,26 @@ export function dessinerPartie(echelle: number): void {
   if (p.fiches.length) fiche(p.fiches[0], j);
   if (p.pause) dessinerPause();
   if (p.fin) dessinerFin(p);
+}
+
+/** Les conseils des premières pages : le tutoriel, au fil de la partie. */
+function astuce(p: Partie): string | null {
+  const j = p.jeu;
+  const id = p.page?.id;
+  if (p.mode !== "campagne" || p.fiches.length || p.selection || (sauvegarde.etoiles[id ?? ""] ?? 0) > 0) return null;
+  if (id === "1-1") {
+    if (!j.tours.length) return "Dessine un PETIT cercle à côté du chemin pointillé : une Plume.";
+    if (j.phase === "attente") return "Une tour de plus si tu peux, puis « Go ! ». Touche une tour pour l'améliorer.";
+    if (j.vague <= 2) return "Un grand trait LENT trace un mur : la horde le contourne, et le chemin s'allonge.";
+    if (j.vague <= 4) return "Un trait SEC et rapide rature ce qu'il touche. Dans le vide, l'encre est perdue.";
+    if (j.vague <= 6) return "Appelle la vague suivante plus tôt (en haut) : chaque seconde gagnée rapporte de l'encre.";
+  }
+  if (id === "1-2" && j.vague <= 2) return "Des murs en travers du zigzag : plus le chemin est long, plus tes tours tirent.";
+  const present = (t: TypeEnnemi) => j.ennemis.some((e) => !e.mort && e.type === t);
+  if (id === "1-3" && present("avion")) return "Les avions volent par-dessus les murs. Les ratures les arrêtent.";
+  if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
+  if (id === "1-4" && present("tache")) return "Les taches rongent les murs, et se divisent en mourant.";
+  return null;
 }
 
 const tourDe = (g: string): TypeTour => (Object.keys(TOURS) as TypeTour[]).find((t) => TOURS[t].glyphe === g)!;
@@ -285,13 +312,31 @@ function listeVague(plan: PlanVague, x: number, y: number, largeur: number, tail
   return cy - y + taille + 9;
 }
 
+/** Calculée une fois par partie, pour que la carte ne saute pas quand on trace des murs. */
+const placeCarte = new WeakMap<Jeu, number>();
+
 function carteAttente(p: Partie): void {
   const ctx = ui.ctx;
   const j = p.jeu;
   const x = 14;
-  const y = HAUT + 10;
   const w = W - 28;
   const h = 118;
+  // La carte se pose là où elle cache le moins : ni entrée ni Cœur, et le moins de chemin possible
+  const poids = [
+    ...j.carte.entrees.map((e) => ({ ...e.bord, k: 10 })),
+    { ...j.carte.coeur, k: 30 },
+    ...j.trajets.flat().map((q) => ({ ...q, k: 0.3 })),
+  ];
+  let y = placeCarte.get(j) ?? HAUT + 10;
+  let meilleur = placeCarte.has(j) ? -Infinity : Infinity;
+  for (let yy = 10; yy <= PAGE_H - h - 10; yy += 10) {
+    const cout = poids.reduce((s, q) => s + (q.y > yy - 25 && q.y < yy + h + 25 ? q.k : 0), 0) + yy * 0.001;
+    if (cout < meilleur) {
+      meilleur = cout;
+      y = HAUT + yy;
+    }
+  }
+  placeCarte.set(j, y);
   ctx.fillStyle = "rgba(246,239,220,0.9)";
   ctx.fillRect(x, y, w, h);
   rectangle(ctx, x, y, w, h, { epaisseur: 1.4, graine: 90, couleur: CRAYON });
