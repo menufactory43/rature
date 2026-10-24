@@ -133,7 +133,7 @@ function bilan(nom: string, options: () => Options, n: number): void {
   console.log(`${nom.padEnd(18)} ${lignes.join("  |  ")}`);
 }
 
-if (import.meta.url.endsWith("bot.ts") && process.argv[1]?.includes("bot")) main();
+main();
 function main(): void {
 const args = process.argv.slice(2);
 const n = Number(args.find((a) => /^\d+$/.test(a)) ?? 5);
