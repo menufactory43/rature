@@ -19,7 +19,7 @@ import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
 import { RELIURE, calculer, ecranDans, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
 import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
-import { compagnonMenu } from "./ui/compagnon";
+import { compagnonMenu, dessinerScene, glisser as glisserBille, lacher as lacherBille, saisir as saisirBille } from "./ui/compagnon";
 import { dessinerReglages } from "./ui/reglages";
 import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
@@ -106,6 +106,11 @@ nav.ouvrirPage = (p) => jouerPage(p, "campagne");
 canvas.addEventListener("pointerdown", (e) => {
   audio.deverrouiller();
   const r = canvas.getBoundingClientRect();
+  // Bille d'abord : on la touche, ou on l'emmène ailleurs
+  if (saisirBille((e.clientX - r.left) * vue.dpr, (e.clientY - r.top) * vue.dpr)) {
+    canvas.setPointerCapture(e.pointerId);
+    return;
+  }
   const b = boutonSous((e.clientX - r.left) * vue.dpr, (e.clientY - r.top) * vue.dpr);
   if (b) {
     if (b.visible !== false) ui.appui = { ...b, depuis: ui.temps };
@@ -120,6 +125,8 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  if (glisserBille((e.clientX - r.left) * vue.dpr, (e.clientY - r.top) * vue.dpr)) return;
   if (nav.ecran === "partie") glisserPartie(e, versPage);
   if (nav.ecran === "trousse") {
     const p = versPage(e);
@@ -128,6 +135,7 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 function lever(e: PointerEvent): void {
+  if (lacherBille()) return;
   if (nav.ecran === "partie") leverPartie(e);
   if (nav.ecran === "trousse") leverTrousse();
 }
@@ -257,7 +265,7 @@ function image(maintenant: number): void {
     else if (nav.ecran === "reglages") dessinerReglages();
     else if (nav.ecran === "coop") dessinerCoop();
     // Bille, dans son coin (le titre la dessine lui-même)
-    compagnonMenu(ctx, nav.ecran, lancerTuto);
+    compagnonMenu(nav.ecran, lancerTuto);
     if (vue.mise === "ouvert") {
       ctx.setTransform(pageDroiteMenu(vue));
       if (fond) ctx.drawImage(fond, 0, 0, W, H);
@@ -268,6 +276,8 @@ function image(maintenant: number): void {
     ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
     ombrePli(ctx, (vue.pli - x0) / unite, lh, RELIURE / unite);
   }
+  // Bille, par-dessus tout ce qui précède (sauf dans le tutoriel, qui a la sienne)
+  if (!(enPartie && partie?.tuto)) dessinerScene(ctx, { menu: vue.menu, carte: vue.carte, dessus: vue.dessus });
   dessinerAppui();
   ctx.setTransform(dpr * unite, 0, 0, dpr * unite, x0 * dpr, y0 * dpr);
   if (!vue.plein) coinCorne(ctx, lw, lh);

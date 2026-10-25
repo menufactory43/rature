@@ -43,6 +43,8 @@ const etat = {
   /** Le conseil du moment : affiché quand elle n'a rien d'autre à dire. */
   fixe: null as string | null,
   astuce: 0,
+  /** Le dernier signe de vie du joueur : sans rien, elle s'ennuie, puis s'endort. */
+  calme: 0,
 };
 
 const CLE_DITS = "rature.bille";
@@ -76,6 +78,7 @@ export function dire(texte: string, o: Dire = {}): boolean {
       }
     }
   }
+  etat.calme = t;
   etat.replique = { texte, depuis: t, duree: o.duree ?? Math.min(9, 3 + texte.length * 0.045), humeur: o.humeur, choix: o.choix };
   return true;
 }
@@ -148,7 +151,16 @@ export interface Place {
   alpha?: number;
 }
 
-export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place): void {
+/** Depuis combien de temps rien ne s'est passé. */
+const ennui = () => ui.temps - etat.calme;
+const DORT = 45;
+
+/** Le joueur a touché l'écran. */
+export function activite(): void {
+  etat.calme = ui.temps;
+}
+
+export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place, glissable = false): void {
   const active = reglages.bille;
   if (!active && !pl.toujours) return;
   const t = ui.temps;
@@ -158,16 +170,20 @@ export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place): voi
   ctx.save();
   ctx.globalAlpha = pl.alpha ?? 1;
   const depuis = r && !pl.texte ? t - r.depuis : 9;
-  const salue = !texte && t % 7 < 1.1;
+  // Sans rien à dire : elle salue de temps en temps, regarde partout quand on la laisse, puis s'endort
+  const e = ennui();
+  const dort = active && !texte && e > DORT;
+  const salue = !texte && !dort && e < 12 && t % 7 < 1.1;
   bille(ctx, pl.x, pl.y, pl.h, t, {
-    joie: humeur === "joie" ? depuis < 2 : salue,
+    joie: pl.humeur === "joie" || (humeur === "joie" ? depuis < 2 : salue),
     triste: humeur === "triste",
-    surprise: humeur === "surprise" && depuis < 2.5,
+    surprise: humeur === "surprise" && (!!pl.humeur || depuis < 2.5),
     parle: !!texte && depuis < 2.5,
     montre: pl.montre,
-    regard: 0.6,
+    regard: e > 12 && !texte ? Math.sin(t * 0.7) * 0.9 : 0.6,
+    dort,
   });
-  if (pl.touche) zone(pl.x - pl.h * 0.3, pl.y - pl.h * 1.1, pl.h * 0.6, pl.h * 1.1, pl.touche);
+  if (pl.touche && !glissable) zone(pl.x - pl.h * 0.3, pl.y - pl.h * 1.1, pl.h * 0.6, pl.h * 1.1, pl.touche);
   if (texte) bulle(ctx, pl, texte, r && !pl.texte ? r : null);
   ctx.restore();
 }
@@ -176,11 +192,14 @@ export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place): voi
 function bulle(ctx: CanvasRenderingContext2D, pl: Place, texte: string, r: Replique | null): void {
   const taille = pl.h > 80 ? 16 : 15;
   const choix = r?.choix ?? [];
-  const w = pl.bulle?.w ?? Math.min(W - 12 - (pl.x + pl.h * 0.15), 300);
+  const w = pl.bulle?.w ?? Math.min(W - 24, 300);
   const lignes = couper(ctx, texte, w - 20, { taille });
   const h = lignes.length * taille * 1.2 + 18 + (choix.length ? 38 : 0);
-  const x = pl.bulle?.x ?? pl.x + pl.h * 0.15;
-  const y = pl.bulle?.y ?? pl.y - pl.h * 1.12 - 14 - h;
+  // Au-dessus d'elle, du côté où il y a de la place ; en dessous si elle est tout en haut
+  const gauche = pl.x > W / 2;
+  const x = pl.bulle?.x ?? Math.max(8, Math.min(W - 8 - w, gauche ? pl.x - pl.h * 0.15 - w : pl.x + pl.h * 0.15));
+  const dessus = pl.y - pl.h * 1.12 - 14 - h;
+  const y = pl.bulle?.y ?? (dessus > 8 ? dessus : pl.y + 12);
   // Elle apparaît d'un coup, et s'efface à la fin
   const age = r ? ui.temps - r.depuis : 9;
   const fin = r ? r.duree - age : 9;
@@ -189,7 +208,7 @@ function bulle(ctx: CanvasRenderingContext2D, pl: Place, texte: string, r: Repli
   const tete = { x: pl.x + pl.h * 0.08, y: pl.y - pl.h * 1.02 };
   // La queue part du bord de la bulle le plus proche de la tête
   const bas = tete.y > y + h / 2;
-  const qx = Math.max(x + 18, Math.min(x + w - 18, tete.x + 16));
+  const qx = Math.max(x + 18, Math.min(x + w - 18, tete.x + (gauche ? -16 : 16)));
   const qy = bas ? y + h - 2 : y + 2;
   ctx.fillStyle = "rgba(253,250,240,0.97)";
   ctx.strokeStyle = "rgba(60,60,80,0.35)";
@@ -243,7 +262,7 @@ let ecranAvant = "";
 let calmeDepuis = 0;
 
 /** Bille sur un écran de menu (appelée après le dessin de l'écran, dans ses coordonnées). */
-export function compagnonMenu(ctx: CanvasRenderingContext2D, ecran: Ecran, tuto: () => void): void {
+export function compagnonMenu(ecran: Ecran, tuto: () => void): void {
   if (ecran === "partie") return;
   if (ecran !== ecranAvant) {
     ecranAvant = ecran;
@@ -255,12 +274,12 @@ export function compagnonMenu(ctx: CanvasRenderingContext2D, ecran: Ecran, tuto:
   }
   if (ecran === "titre") return;
   const pl = PLACES[ecran] ?? { x: 36, y: H - 18, h: 62 };
-  dessinerCompagnon(ctx, { ...pl, touche: () => toucherBille(tuto) });
+  placer({ ...pl, cle: "menu-" + ecran, repere: "menu", touche: () => toucherBille(tuto) });
 }
 
 /** Le titre : Bille en grand à côté du nom du jeu ; la première fois, elle propose le tutoriel. */
 export function compagnonTitre(ctx: CanvasRenderingContext2D, tutoVu: boolean, tuto: () => void): void {
-  if (ecranAvant !== "titre") compagnonMenu(ctx, "titre", tuto);
+  if (ecranAvant !== "titre") compagnonMenu("titre", tuto);
   const t = ui.temps;
   if (tutoVu && t - calmeDepuis > 25)
     dire(ON_DIRAIT + "jouer à un jeu. Veux-tu de l'aide ?", {
@@ -376,7 +395,83 @@ export function refusBille(geste: Geste, raison: string): void {
   dire(`${ON_DIRAIT}${quoi[geste]}… mais ${raison}.`, { cle: "refus", recharge: 8, urgent: true });
 }
 
-/** Où elle se tient pendant la partie : dans la marge, en bas de la page. */
-export function placeEnPartie(haut: number, pageH: number): { x: number; y: number; h: number } {
-  return { x: 24, y: haut + pageH - 6, h: 54 };
+// --- Bille par-dessus tout, qu'on déplace au doigt ---
+// Chaque écran dit où il voudrait la voir (placer) ; main la dessine en tout dernier, au-dessus des fenêtres. Si le
+// joueur l'a posée ailleurs, elle reste là où il l'a mise, écran par écran.
+
+export type Repere = "menu" | "carte" | "dessus";
+type PlaceScene = Place & { cle: string; repere: Repere };
+
+const CLE_PLACES = "rature.bille.places";
+const positions: Record<string, { x: number; y: number }> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(CLE_PLACES) ?? "{}") as Record<string, { x: number; y: number }>;
+  } catch {
+    return {};
+  }
+})();
+
+let voulue: PlaceScene | null = null;
+let dessinee: { pl: PlaceScene; m: DOMMatrix } | null = null;
+let prise: { dx: number; dy: number; sx: number; sy: number; bouge: boolean; dormait: boolean } | null = null;
+
+/** Où l'écran voudrait voir Bille à cette image (le dernier appel l'emporte : la pause passe devant la partie). */
+export function placer(pl: PlaceScene): void {
+  voulue = pl;
+}
+
+/** Dessine Bille par-dessus tout, dans le repère demandé ; appelée par main en fin d'image. */
+export function dessinerScene(ctx: CanvasRenderingContext2D, reperes: Record<Repere, DOMMatrix>): void {
+  const pl = voulue;
+  voulue = null;
+  if (!pl || !reglages.bille) {
+    dessinee = null;
+    return;
+  }
+  const pos = positions[pl.cle];
+  const p = pos ? { ...pl, x: pos.x, y: pos.y } : pl;
+  ctx.save();
+  ctx.setTransform(reperes[pl.repere]);
+  dessinerCompagnon(ctx, p, true);
+  ctx.restore();
+  dessinee = { pl: p, m: reperes[pl.repere] };
+}
+
+/** Un doigt se pose (pixels du canvas) : sur Bille, on la prend. */
+export function saisir(px: number, py: number): boolean {
+  activite();
+  const d = dessinee;
+  if (!d) return false;
+  const q = d.m.inverse().transformPoint({ x: px, y: py });
+  const { x, y, h } = d.pl;
+  if (Math.abs(q.x - x) > h * 0.34 || q.y < y - h * 1.12 || q.y > y + 6) return false;
+  prise = { dx: x - q.x, dy: y - q.y, sx: px, sy: py, bouge: false, dormait: ennui() > DORT };
+  return true;
+}
+
+export function glisser(px: number, py: number): boolean {
+  const d = dessinee;
+  if (!prise || !d) return !!prise;
+  if (!prise.bouge && Math.hypot(px - prise.sx, py - prise.sy) < 14) return true;
+  prise.bouge = true;
+  const q = d.m.inverse().transformPoint({ x: px, y: py });
+  const h = d.pl.h;
+  positions[d.pl.cle] = { x: Math.max(16, Math.min(W - 16, q.x + prise.dx)), y: Math.max(h * 1.2, Math.min(H - 4, q.y + prise.dy)) };
+  return true;
+}
+
+export function lacher(): boolean {
+  const p = prise;
+  prise = null;
+  if (!p) return false;
+  if (p.bouge) {
+    try {
+      localStorage.setItem(CLE_PLACES, JSON.stringify(positions));
+    } catch {
+      // Elle reviendra à sa place la prochaine fois
+    }
+    dire(tirer(["Ici, c'est parfait.", "Merci, je voyais mal de là-bas.", "Je ne gêne plus ?", "Hop !"]), { cle: "pose", recharge: 20, urgent: true, humeur: "joie" });
+  } else if (p.dormait) dire("Hein ? Je ne dormais pas ! Je… réfléchissais.", { urgent: true, humeur: "surprise" });
+  else dessinee?.pl.touche?.();
+  return true;
 }

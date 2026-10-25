@@ -1,6 +1,5 @@
 // L'écran de jeu : la page, les bandeaux, le pense-bête des symboles, le menu des tours, la pause et la fin.
-import { astuceDe, billeActive, conseil, dessinerCompagnon, observerPartie, placeEnPartie, refusBille, toucherBille } from "./compagnon";
-import { bille } from "../render/bille";
+import { astuceDe, billeActive, conseil, dire, observerPartie, placer, refusBille, toucherBille } from "./compagnon";
 import * as audio from "../audio";
 import * as fx from "../render/fx";
 import { vibrer } from "../vibre";
@@ -521,7 +520,9 @@ export function dessinerPartie(v: Vue): void {
       dessine: !!p.trace,
       tuto: lancerTuto,
     });
-    dessinerCompagnon(ctx, { ...placeEnPartie(HAUT, PAGE_H), muette: !!p.trace || !!p.arme, alpha: p.trace ? 0.5 : 1, touche: () => toucherBille(lancerTuto) });
+    if (p.fiches.length) dire("Une nouvelle tour ! Regarde bien son symbole : tu le dessineras en petit sur la page.", { cle: "fiche", recharge: 20, urgent: true, humeur: "joie" });
+    if (j.choix) dire("Une fourniture au choix ! Prends ce qui manque à ta défense.", { cle: "fourniture", recharge: 90, urgent: true });
+    placer({ x: 24, y: HAUT + PAGE_H - 6, h: 58, cle: "partie", repere: "carte", muette: !!p.trace || !!p.arme, alpha: p.trace ? 0.5 : 1, touche: () => toucherBille(lancerTuto) });
   }
   if (p.coop) attenteBinome(p, p.coop);
   if (j.choix) choixFournitures(p, j.choix);
@@ -1291,7 +1292,7 @@ function fiche(type: TypeTour, j: Jeu): void {
 function dessinerPause(): void {
   voile(0.88);
   // Bille profite de la pause pour glisser une astuce
-  if (partie && !partie.tuto) dessinerCompagnon(ui.ctx, { x: 40, y: H - 30, h: 84, texte: astuceDe(partie.jeu.stats.tues + partie.jeu.vague * 7) });
+  if (partie && !partie.tuto) placer({ x: 40, y: H - 30, h: 84, cle: "pause", repere: "dessus", texte: astuceDe(partie.jeu.stats.tues + partie.jeu.vague * 7) });
   ecrire(ui.ctx, "Pause", W / 2, 230, { police: "titre", taille: 64 });
   bouton(90, 300, 220, 56, "Reprendre", () => partie && mettrePause(partie, false), { principal: true });
   const c = partie?.coop;
@@ -1364,6 +1365,16 @@ function motDeLaProf(p: Partie): string {
   return tire(["Juste… peut mieux faire.", "Passable.", "Ouf ! De justesse."]);
 }
 export { etoile };
+
+/** Ce que Bille dit à la fin de la page. */
+function motDeBille(p: Partie): string {
+  const j = p.jeu;
+  const gagne = j.phase === "gagne";
+  if (p.mode === "interro") return gagne ? "Remarquable, comme dit la prof !" : "On révise un peu et on y retourne ?";
+  if (p.mode === "sansFin") return "Joli score ! On essaie de le battre ?";
+  if (!gagne) return "C'est pas grave. On recommence ? Je t'aiderai.";
+  return etoiles(j) >= 3 ? "Trois étoiles ! Je suis fière de toi." : "Bravo ! Je savais que tu y arriverais.";
+}
 
 function dessinerFin(p: Partie): void {
   const ctx = ui.ctx;
@@ -1457,7 +1468,7 @@ function dessinerFin(p: Partie): void {
     const lm = ctx.measureText(mot).width;
     trait(ctx, [{ x: W / 2 + 10 - lm / 2, y: 494 }, { x: W / 2 + 10 + lm / 2, y: 489 }], { couleur: ROUGE, epaisseur: 1.6, graine: 199, alpha: Math.min(1, (t - 1.6) * 3) });
   }
-  if (billeActive() && t > 1.6) bille(ctx, 46, 470, 70, ui.temps, { joie: gagne || sansFin, triste: !gagne && !sansFin });
+  if (t > 1.6) placer({ x: 36, y: H - 16, h: 66, cle: "fin", repere: "dessus", humeur: gagne || sansFin ? "joie" : "triste", texte: motDeBille(p) });
   if (ui.temps - p.finDepuis < 0.8) return;
   const suivante = p.page && p.mode === "campagne" && gagne ? PAGES[PAGES.indexOf(p.page) + 1] : undefined;
   let y = 512;

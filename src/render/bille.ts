@@ -18,6 +18,8 @@ export interface PoseBille {
   triste?: boolean;
   /** Étonnée : sourcils levés, bouche ronde. */
   surprise?: boolean;
+  /** Endormie : yeux fermés, petits « z » qui montent. */
+  dort?: boolean;
 }
 
 /** Bille, la pointe posée en (x, y), haute de h. */
@@ -97,7 +99,7 @@ export function bille(ctx: CanvasRenderingContext2D, x: number, y: number, h: nu
   trait(ctx, [{ x: cl / 2, y: -h * 0.18 }, { x: cl / 2 + h * 0.05, y: -h * 0.15 }, { x: cl / 2 + h * 0.05, y: h * 0.12 }], { couleur: CONTOUR, epaisseur: Math.max(1.2, h * 0.022), graine: g + 6, amp: 0.2, pate: false });
   ctx.restore();
   // Les yeux
-  const clin = (t + 0.7) % 3.4 < 0.12;
+  const clin = o.dort || (t + 0.7) % 3.4 < 0.12;
   const ry = Math.max(2.2, h * 0.07);
   const yo = haut + h * 0.17;
   const regard = o.montre ? Math.sign(o.montre.x - x) * 0.8 : o.regard ?? 0.3;
@@ -134,6 +136,18 @@ export function bille(ctx: CanvasRenderingContext2D, x: number, y: number, h: nu
     ctx.fill();
   }
   const ouvre = o.parle ? Math.abs(Math.sin(t * 13)) : 0;
+  if (o.dort) {
+    // Les « z » montent de la tête et s'effacent
+    for (let k = 0; k < 3; k++) {
+      const u = (t * 0.45 + k / 3) % 1;
+      ctx.save();
+      ctx.globalAlpha *= Math.sin(u * Math.PI);
+      ctx.fillStyle = CONTOUR;
+      ctx.font = `700 ${Math.round(h * (0.2 + u * 0.14))}px Caveat, cursive`;
+      ctx.fillText("z", x + l * 0.6 + u * h * 0.3, haut - h * 0.1 - u * h * 0.45);
+      ctx.restore();
+    }
+  }
   ctx.strokeStyle = CONTOUR;
   ctx.lineWidth = Math.max(1, h * 0.022);
   // Les sourcils, quand elle a une humeur
