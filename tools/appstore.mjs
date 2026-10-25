@@ -1,7 +1,7 @@
 // Remplit la fiche App Store de Rature par l'API App Store Connect : textes FR et EN, catégories, âge, URLs,
 // captures d'écran (tools/fiche/captures/<langue>/<appareil>-N.png) et Game Center (succès, classements, images).
 // La fiche de l'app doit exister (Apple ne permet pas de la créer par l'API). Relançable : ce qui existe est mis à jour.
-//   node tools/appstore.mjs [textes] [captures] [gamecenter]     (sans argument : tout)
+//   node tools/appstore.mjs [textes] [captures] [apercu] [gamecenter]     (sans argument : tout)
 import { createHash, createPrivateKey, sign } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -58,7 +58,7 @@ async function televerser(type, attributsCreation, relation, fichier) {
     const r = await fetch(op.url, { method: op.method, headers: h, body: octets.subarray(op.offset, op.offset + op.length) });
     if (!r.ok) throw new Error(`envoi de ${nom} : ${r.status}`);
   }
-  await api("PATCH", `/v1/${type}/${cree.data.id}`, { data: { type, id: cree.data.id, attributes: { uploaded: true, ...(type === "appScreenshots" ? { sourceFileChecksum: createHash("md5").update(octets).digest("hex") } : {}) } } });
+  await api("PATCH", `/v1/${type}/${cree.data.id}`, { data: { type, id: cree.data.id, attributes: { uploaded: true, ...(["appScreenshots", "appPreviews"].includes(type) ? { sourceFileChecksum: createHash("md5").update(octets).digest("hex") } : {}) } } });
   return cree.data.id;
 }
 
@@ -155,6 +155,26 @@ if (faire("captures")) {
         console.log(`  ${l} ${f} (${Math.round(statSync(join(dossier, f)).size / 1024)} ko)`);
       }
     }
+  }
+}
+
+// --- La vidéo d'aperçu (tools/apercu.mjs) ---
+
+if (faire("apercu")) {
+  console.log("Aperçu vidéo");
+  const version = (await api("GET", `/v1/apps/${app.id}/appStoreVersions?filter[platform]=IOS&limit=5`)).data[0];
+  const vlocs = await api("GET", `/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations`);
+  for (const loc of vlocs.data) {
+    const l = loc.attributes.locale;
+    const fichier = join(ICI, "fiche/apercu", l.slice(0, 2), "iphone.mp4");
+    if (!existsSync(fichier)) continue;
+    const sets = await api("GET", `/v1/appStoreVersionLocalizations/${loc.id}/appPreviewSets?include=appPreviews`);
+    let set = sets.data.find((s) => s.attributes.previewType === "IPHONE_67");
+    if (set) for (const c of set.relationships?.appPreviews?.data ?? []) await essayer("effacer un aperçu", () => api("DELETE", `/v1/appPreviews/${c.id}`));
+    else set = (await api("POST", "/v1/appPreviewSets", { data: { type: "appPreviewSets", attributes: { previewType: "IPHONE_67" }, relationships: { appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations", id: loc.id } } } } })).data;
+    // L'image d'affiche : en pleine bataille
+    await essayer(`${l} aperçu`, () => televerser("appPreviews", { mimeType: "video/mp4", previewFrameTimeCode: "00:00:06:00" }, { appPreviewSet: { data: { type: "appPreviewSets", id: set.id } } }, fichier));
+    console.log(`  ${l} iphone.mp4 (${Math.round(statSync(fichier).size / 1024)} ko)`);
   }
 }
 
