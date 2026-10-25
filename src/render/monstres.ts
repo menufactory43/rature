@@ -1,185 +1,300 @@
-// Les monstres des marges, dessinés au stylo rouge.
+// Les monstres : des mots qui s'écrivent tout seuls sur la page, au stylo rouge, et marchent vers le Cœur. Chacun a un
+// corps de lettre (ou de mot), des yeux griffonnés et de petites pattes ; la silhouette dit déjà ce qu'il fait. Le
+// h muet est écrit au crayon (furtif), la majuscule repassée dix fois (blindée), le point d'exclamation fonce sur
+// les tours, la faute éclate en lettres quand on la rature.
 import type { TypeEnnemi } from "../sim/ennemis";
-import { CRAYON, PAPIER, ROUGE, cercle, ecrire, hachures, rectangle, trait } from "./encre";
+import { hash3 } from "../sim/rng";
+import { CRAYON, ROUGE, hachures, trait } from "./encre";
 
 /** Le clignement : un instant toutes les trois secondes environ, décalé selon le monstre. */
 let clin = false;
+/** Le tremblé du stylo, huit fois par seconde (comme le reste de la page). */
+let tic = 0;
+const tremble = (g: number, i: number, amp: number) => (hash3(g, i, tic) - 0.5) * 2 * amp;
 
-function yeux(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, fache: boolean, couleur: string): void {
+const ENCRE_OEIL = "#2a2a35";
+
+/** Une lettre (ou un mot) à l'encre : repassée en plusieurs passages légèrement décalés, comme quand on appuie. */
+function lettre(ctx: CanvasRenderingContext2D, txt: string, x: number, y: number, taille: number, couleur: string, g: number, passes = 2, alpha = 1): void {
+  ctx.save();
+  ctx.font = `700 ${taille}px Caveat, cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
   ctx.fillStyle = couleur;
+  ctx.globalAlpha *= alpha;
+  // Centrée sur son vrai contour (une majuscule monte plus haut qu'une minuscule)
+  const m = ctx.measureText(txt);
+  const by = y + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+  const amp = passes > 2 ? taille * 0.025 : taille * 0.012;
+  for (let k = 0; k < passes; k++) ctx.fillText(txt, x + tremble(g, k * 2, amp), by + tremble(g, k * 2 + 1, amp));
+  ctx.restore();
+}
+
+/** Deux yeux ronds griffonnés, qui regardent où le monstre va (ou fâchés). */
+function yeux(ctx: CanvasRenderingContext2D, x: number, y: number, ecart: number, r: number, regard: number, g: number, fache = false, alpha = 1): void {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
   for (const s of [-1, 1]) {
+    const ex = x + s * ecart + tremble(g, s + 5, r * 0.08);
+    const ey = y + tremble(g, s + 7, r * 0.08);
+    ctx.lineWidth = Math.max(0.8, r * 0.3);
+    ctx.strokeStyle = ENCRE_OEIL;
     if (clin) {
-      trait(ctx, [{ x: x + s * r * 0.35 - r * 0.12, y: y - r * 0.15 }, { x: x + s * r * 0.35 + r * 0.12, y: y - r * 0.15 }], { couleur, epaisseur: 1.2, amp: 0.2 });
-    } else {
       ctx.beginPath();
-      ctx.arc(x + s * r * 0.35, y - r * 0.15, Math.max(1.2, r * 0.11), 0, Math.PI * 2);
+      ctx.moveTo(ex - r, ey);
+      ctx.lineTo(ex + r, ey);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#fffaf0";
+      ctx.beginPath();
+      ctx.arc(ex, ey, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = ENCRE_OEIL;
+      ctx.beginPath();
+      ctx.arc(ex + regard * r * 0.42, ey + r * 0.15, r * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (fache)
-      trait(ctx, [{ x: x + s * r * 0.6, y: y - r * 0.5 }, { x: x + s * r * 0.15, y: y - r * 0.3 }], { couleur, epaisseur: 1.4, amp: 0.3 });
+    if (fache) {
+      ctx.lineWidth = Math.max(1, r * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(ex + s * r * 1.3, ey - r * 1.7);
+      ctx.lineTo(ex - s * r * 0.3, ey - r * 1.05);
+      ctx.stroke();
+    }
   }
+  ctx.restore();
 }
 
-/** Deux petites jambes qui marchent sous le corps. */
-function jambes(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, age: number, couleur: string, graine: number): void {
-  const pas = Math.sin(age * 12 + graine);
-  for (const s of [-1, 1]) {
-    const lev = Math.max(0, pas * s) * r * 0.25;
-    trait(ctx, [{ x: x + s * r * 0.4, y: y - 1 }, { x: x + s * r * 0.45 + pas * s * r * 0.15, y: y + r * 0.35 - lev }, { x: x + s * r * 0.65 + pas * s * r * 0.15, y: y + r * 0.35 - lev }], { couleur, epaisseur: 1.3, graine: graine + s, amp: 0.2 });
+/** De petites pattes qui trottinent sous le corps. */
+function pattes(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, ecart: number, l: number, age: number, couleur: string, g: number, alpha = 1): void {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.strokeStyle = couleur;
+  ctx.lineWidth = Math.max(1, l * 0.22);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < n; i++) {
+    const px = x + (n === 1 ? 0 : (i / (n - 1) - 0.5) * 2 * ecart);
+    const pas = Math.sin(age * 14 + i * Math.PI + g) * l * 0.45;
+    ctx.beginPath();
+    ctx.moveTo(px, y);
+    ctx.lineTo(px + pas + tremble(g, i, l * 0.06), y + l);
+    ctx.lineTo(px + pas + (i % 2 ? 1 : -1) * l * 0.4, y + l);
+    ctx.stroke();
   }
+  ctx.restore();
 }
+
+const MINUSCULES = "aeosucmnrv";
+const MAJUSCULES = "BMRDP";
+/** Les fautes qui marchent. */
+const FAUTES = ["fote", "sa va", "éléfan", "bocou", "kom", "aprè", "pluzieur", "ortograf"];
+const SERPENT = "anticonstitutionnellement";
+
+/** Le chemin parcouru par chaque mot-serpent, pour que sa queue suive les virages. */
+const traces = new Map<number, { x: number; y: number }[]>();
+
+/** La position à la distance d derrière la tête, le long du chemin parcouru (puis tout droit derrière, au-delà). */
+function sillage(g: number, x: number, y: number, angle: number, age: number) {
+  let t = traces.get(g);
+  if (!t || age <= 0) {
+    if (traces.size > 12) traces.clear();
+    t = [];
+    if (age > 0) traces.set(g, t);
+  }
+  const der = t[t.length - 1];
+  if (!der || Math.hypot(der.x - x, der.y - y) > 2) {
+    t.push({ x, y });
+    if (t.length > 160) t.shift();
+  }
+  const c0 = Math.cos(angle);
+  const s0 = Math.sin(angle);
+  return (d: number) => {
+    let reste = d;
+    let a = { x, y };
+    for (let i = t!.length - 1; i >= 0; i--) {
+      const b = t![i];
+      const l = Math.hypot(b.x - a.x, b.y - a.y);
+      if (l >= reste && l > 0) {
+        const u = reste / l;
+        return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, c: (a.x - b.x) / l, s: (a.y - b.y) / l };
+      }
+      reste -= l;
+      a = b;
+    }
+    return { x: a.x - c0 * reste, y: a.y - s0 * reste, c: c0, s: s0 };
+  };
+}
+
+/** La faute que porte un monstre (et dont les lettres repartent seules quand on la rature). */
+export const fauteDe = (graine: number) => FAUTES[Math.abs(Math.round(graine)) % FAUTES.length];
 
 export function monstre(ctx: CanvasRenderingContext2D, type: TypeEnnemi, x: number, y: number, r: number, graine: number, age: number, couleur = ROUGE, angle = 0): void {
-  const o = { couleur, epaisseur: 1.8, graine };
   clin = age > 0 && (age + graine * 0.37) % 3.1 < 0.13;
+  tic = Math.floor(age * 8);
+  const g = Math.abs(Math.round(graine));
+  const regard = Math.cos(angle) * 0.9;
   switch (type) {
     case "gribouille": {
-      jambes(ctx, x, y + r * 0.8, r, age, couleur, graine);
-      cercle(ctx, x, y, r, { ...o, fond: "rgba(246,239,220,0.9)" });
-      // Les boucles du gribouillis, à l'intérieur
-      const boucles: { x: number; y: number }[] = [];
-      for (let i = 0; i <= 16; i++) {
-        const a = i * 1.9 + graine;
-        boucles.push({ x: x + Math.cos(a) * r * 0.55 + Math.cos(i * 0.6) * r * 0.2, y: y + Math.sin(a) * r * 0.35 - r * 0.45 });
-      }
-      trait(ctx, boucles, { couleur, epaisseur: 0.8, graine: graine + 3, alpha: 0.45, amp: 0.4 });
-      yeux(ctx, x, y, r, false, couleur);
-      trait(ctx, [-0.4, -0.2, 0, 0.2, 0.4].map((k) => ({ x: x + k * r, y: y + r * 0.3 + (0.16 - k * k) * r * 0.7 })), { ...o, epaisseur: 1.4 });
+      pattes(ctx, x, y + r * 0.75, 2, r * 0.38, r * 0.6, age, couleur, g);
+      lettre(ctx, MINUSCULES[g % MINUSCULES.length], x, y, r * 3.6, couleur, g);
+      yeux(ctx, x, y - r * 0.3, r * 0.38, r * 0.3, regard, g);
       break;
     }
     case "carre": {
-      jambes(ctx, x, y + r * 0.85, r * 1.1, age * 0.7, couleur, graine);
-      rectangle(ctx, x - r, y - r * 0.85, r * 2, r * 1.7, { ...o, fond: "rgba(246,239,220,0.9)" });
-      // Le blindage : des rivets dans les coins
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        ctx.fillStyle = couleur;
-        ctx.beginPath();
-        ctx.arc(x + a * r * 0.72, y + b * r * 0.6, 1.1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      yeux(ctx, x, y, r, true, couleur);
-      trait(ctx, [{ x: x - r * 0.4, y: y + r * 0.4 }, { x: x + r * 0.4, y: y + r * 0.4 }], { ...o, epaisseur: 1.4 });
+      // Une majuscule repassée dix fois : on voit qu'elle est blindée
+      pattes(ctx, x, y + r * 0.95, 2, r * 0.45, r * 0.5, age * 0.7, couleur, g);
+      lettre(ctx, MAJUSCULES[g % MAJUSCULES.length], x, y, r * 3.1, couleur, g, 4);
+      yeux(ctx, x - r * 0.05, y - r * 0.5, r * 0.34, r * 0.24, regard, g, true);
       break;
     }
     case "avion": {
+      // Un avion plié dans une page de dictée, couvert de lignes d'écriture
       const c = Math.cos(angle);
       const s = Math.sin(angle);
+      const k = r * 1.25;
       const p = (u: number, v: number) => ({ x: x + c * u - s * v, y: y + s * u + c * v });
-      const aile = 0.75 + Math.sin(age * 9 + graine) * 0.25;
-      trait(ctx, [p(r * 1.3, 0), p(-r, r * 0.9 * aile), p(-r * 0.5, 0), p(-r, -r * 0.9 * aile)], { ...o, ferme: true, fond: "rgba(196,48,43,0.08)" });
-      for (const w of [-0.5, 0.5]) trait(ctx, [p(-r * 1.4, w * r), p(-r * 2.2 - Math.sin(age * 20 + w) * 2, w * r)], { couleur, epaisseur: 0.9, graine: graine + 7, alpha: 0.5, amp: 0.2 });
-      trait(ctx, [p(r * 1.3, 0), p(-r * 0.5, 0)], { ...o, epaisseur: 1.1 });
+      const aile = 0.75 + Math.sin(age * 9 + g) * 0.25;
+      ctx.fillStyle = "rgba(60,50,40,0.12)";
+      ctx.beginPath();
+      ctx.ellipse(x + 4, y + k * 1.4, k * 0.9, k * 0.25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const coque = [p(k * 1.3, 0), p(-k, k * 0.9 * aile), p(-k * 0.5, 0), p(-k, -k * 0.9 * aile)];
+      trait(ctx, coque, { couleur, epaisseur: 1.8, graine: g, ferme: true, fond: "rgba(252,248,236,0.95)", pate: false });
+      for (const v of [-0.55, -0.3, 0.3, 0.55]) trait(ctx, [p(-k * 0.75, v * k * aile), p(k * (0.65 - Math.abs(v)), v * k * aile * 0.45)], { couleur, epaisseur: 0.7, graine: g + 9 + v * 10, alpha: 0.55, amp: 0.25, pate: false });
+      for (const w of [-0.5, 0.5]) trait(ctx, [p(-k * 1.4, w * k), p(-k * 2.2 - Math.sin(age * 20 + w) * 2, w * k)], { couleur: CRAYON, epaisseur: 0.9, graine: g + 7, amp: 0.2, pate: false });
+      trait(ctx, [p(k * 1.3, 0), p(-k * 0.5, 0)], { couleur, epaisseur: 1.1, graine: g + 1, pate: false });
+      const o = p(k * 0.35, 0);
+      yeux(ctx, o.x, o.y - k * 0.15, k * 0.22, k * 0.17, regard, g);
       break;
     }
     case "araignee": {
-      for (let k = 0; k < 8; k++) {
-        const cote = k < 4 ? -1 : 1;
-        const i = k % 4;
-        const a = (i - 1.5) * 0.45 + Math.sin(age * 14 + k) * 0.18;
-        trait(ctx, [
-          { x, y },
-          { x: x + cote * r * 1.1 * Math.cos(a), y: y + r * 1.1 * Math.sin(a) - r * 0.3 },
-          { x: x + cote * r * 1.6 * Math.cos(a), y: y + r * 1.4 * Math.sin(a) + r * 0.2 },
-        ], { couleur, epaisseur: 1.2, graine: graine + k, amp: 0.3 });
-      }
-      cercle(ctx, x, y, r * 0.6, { ...o, fond: couleur });
+      pattes(ctx, x, y + r * 0.35, 6, r * 0.9, r * 0.55, age * 1.6, couleur, g);
+      lettre(ctx, "z", x, y, r * 3.3, couleur, g);
+      yeux(ctx, x, y - r * 0.45, r * 0.34, r * 0.26, regard, g, true);
       break;
     }
-    case "tache":
-    case "petite":
+    case "tache": {
+      // Une faute d'orthographe qui marche, contente d'elle
+      const mot = fauteDe(g);
+      const taille = r * 2.4;
+      ctx.font = `700 ${taille}px Caveat, cursive`;
+      const l = ctx.measureText(mot).width;
+      pattes(ctx, x, y + r * 0.6, Math.min(5, Math.max(3, mot.length - 1)), l * 0.38, r * 0.5, age, couleur, g);
+      lettre(ctx, mot, x, y, taille, couleur, g);
+      yeux(ctx, x - l * 0.32, y - r * 0.5, r * 0.26, r * 0.22, regard, g);
+      break;
+    }
+    case "petite": {
+      // Une lettre échappée d'une faute raturée
+      pattes(ctx, x, y + r * 0.7, 2, r * 0.35, r * 0.6, age * 1.3, couleur, g);
+      lettre(ctx, "fotesavlnk"[g % 10], x, y, r * 3.4, couleur, g);
+      yeux(ctx, x, y - r * 0.35, r * 0.4, r * 0.32, regard, g);
+      break;
+    }
     case "mere": {
-      // Le corps : une goutte lisse qui ondule comme de l'encre liquide
-      const n = 28;
-      const pts = Array.from({ length: n }, (_, i) => {
-        const a = (i / n) * Math.PI * 2;
-        const k = 1 + 0.12 * Math.sin(3 * a + graine) + 0.07 * Math.sin(5 * a + graine * 2.3) + 0.05 * Math.sin(age * 5 + a * 3);
-        return { x: x + Math.cos(a) * r * k, y: y + Math.sin(a) * r * k * 0.92 };
-      });
-      trait(ctx, pts, { ...o, ferme: true, fond: "rgba(196,48,43,0.22)", epaisseur: type === "mere" ? 2.6 : 1.8, amp: 0.4 });
-      // Une goutte qui pend et retombe
-      const u = (age * 0.8 + graine * 0.1) % 1;
-      if (type !== "petite") cercle(ctx, x + r * 0.3, y + r + u * r * 0.8, r * 0.12 * (1 - u * 0.5), { ...o, epaisseur: 1, fond: couleur, alpha: 1 - u });
-      hachures(ctx, pts, "rgba(196,48,43,0.35)", type === "mere" ? 5 : 4);
-      if (type !== "petite") {
-        yeux(ctx, x, y, r * 0.8, true, couleur);
-        if (type === "mere") {
-          // Une couronne de travers, dessinée à la main
-          const cy = y - r * 0.95;
-          trait(ctx, [{ x: x - 12, y: cy }, { x: x - 13, y: cy - 12 }, { x: x - 6, y: cy - 5 }, { x: x, y: cy - 15 }, { x: x + 6, y: cy - 5 }, { x: x + 13, y: cy - 12 }, { x: x + 12, y: cy }], { ...o, ferme: true, fond: "rgba(230,180,60,0.6)", epaisseur: 2 });
-          trait(ctx, [{ x: x - 12, y: cy - 2 }, { x: x + 12, y: cy - 2 }], { ...o, epaisseur: 1 });
-          trait(ctx, [{ x: x - 7, y: y + r * 0.3 }, { x: x - 2, y: y + r * 0.42 }, { x: x + 3, y: y + r * 0.3 }, { x: x + 8, y: y + r * 0.42 }], { ...o, epaisseur: 1.8 });
-        }
+      // Le mot-serpent : un mot à rallonge qui suit le chemin parcouru derrière sa tête couronnée
+      const queue = sillage(g, x, y, angle, age);
+      const n = 11;
+      for (let i = n; i >= 1; i--) {
+        const q = queue(i * r * 0.5);
+        const ond = Math.sin(age * 5 - i * 0.8) * r * 0.12;
+        lettre(ctx, SERPENT[i], q.x - q.s * ond, q.y + q.c * ond, r * (1.25 - i * 0.045), couleur, g + i);
       }
+      lettre(ctx, "A", x, y, r * 2.3, couleur, g, 4);
+      yeux(ctx, x, y - r * 0.25, r * 0.28, r * 0.2, regard, g, true);
+      const cy = y - r * 0.72;
+      trait(ctx, [{ x: x - 12, y: cy }, { x: x - 13, y: cy - 12 }, { x: x - 6, y: cy - 5 }, { x, y: cy - 15 }, { x: x + 6, y: cy - 5 }, { x: x + 13, y: cy - 12 }, { x: x + 12, y: cy }], { couleur, epaisseur: 2, graine: g, ferme: true, fond: "rgba(230,180,60,0.6)" });
       break;
     }
     case "gomme": {
-      jambes(ctx, x, y + r * 0.6, r * 1.2, age * 0.8, couleur, graine);
-      const pts = [{ x: x - r * 1.2, y: y - r * 0.6 }, { x: x + r * 1.2, y: y - r * 0.6 }, { x: x + r * 1.2, y: y + r * 0.6 }, { x: x - r * 1.2, y: y + r * 0.6 }];
-      trait(ctx, pts, { ...o, ferme: true });
-      const moitie = [pts[0], { x: x - r * 0.1, y: y - r * 0.6 }, { x: x - r * 0.1, y: y + r * 0.6 }, pts[3]];
-      hachures(ctx, moitie, "rgba(196,48,43,0.5)", 3, 0.8);
-      trait(ctx, [moitie[1], moitie[2]], o);
-      ecrire(ctx, "GOMME", x + r * 0.55, y, { couleur, taille: 7 });
+      // Une lettre à moitié gommée, qui laisse une traînée effacée derrière elle
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      ctx.save();
+      ctx.globalAlpha *= 0.5;
+      for (let k = 1; k <= 3; k++) {
+        ctx.fillStyle = `rgba(250,246,232,${0.9 - k * 0.2})`;
+        ctx.beginPath();
+        ctx.ellipse(x - c * r * (0.7 + k * 0.7), y - s * r * (0.7 + k * 0.7), r * (0.9 - k * 0.15), r * 0.55, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      for (let k = 0; k < 5; k++) {
+        const u = hash3(g, k, 3);
+        ctx.fillStyle = "rgba(196,48,43,0.35)";
+        ctx.fillRect(x - c * r * (1 + u * 1.6) + (hash3(g, k, 4) - 0.5) * r, y - s * r * (1 + u * 1.6) + (hash3(g, k, 5) - 0.5) * r, 1.4, 1);
+      }
+      pattes(ctx, x, y + r * 0.85, 2, r * 0.45, r * 0.5, age * 0.8, couleur, g);
+      lettre(ctx, "E", x, y, r * 3, couleur, g, 3);
+      // La moitié gommée : du papier par-dessus, puis le grain de la gomme
+      const cote = c >= 0 ? -1 : 1;
+      const zone = [{ x, y: y - r * 1.2 }, { x: x + cote * r * 1.3, y: y - r * 1.2 }, { x: x + cote * r * 1.3, y: y + r * 0.9 }, { x, y: y + r * 0.9 }];
+      ctx.fillStyle = "rgba(246,239,220,0.82)";
+      ctx.beginPath();
+      zone.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.fill();
+      hachures(ctx, zone, "rgba(196,48,43,0.25)", 3, 0.6, 0.8);
+      yeux(ctx, x, y - r * 0.35, r * 0.36, r * 0.26, regard, g);
       break;
     }
     case "compas": {
-      // Un compas qui marche sur ses deux pointes
-      const ecart = r * (0.7 + Math.sin(age * 6) * 0.25);
-      cercle(ctx, x, y - r * 0.9, r * 0.32, { ...o, fond: "rgba(196,48,43,0.2)" });
-      trait(ctx, [{ x, y: y - r * 0.6 }, { x: x - ecart, y: y + r }], { ...o, epaisseur: 3 });
-      trait(ctx, [{ x, y: y - r * 0.6 }, { x: x + ecart, y: y + r }], { ...o, epaisseur: 3 });
-      trait(ctx, [{ x: x - ecart * 0.5, y: y + r * 0.2 }, { x: x + ecart * 0.5, y: y + r * 0.2 }], { ...o, epaisseur: 1.4 });
-      for (let k = 0; k < 6; k++) {
-        const a = (k / 6) * Math.PI * 2 + age;
-        trait(ctx, [{ x, y: y - r * 0.9 }, { x: x + Math.cos(a) * r * 0.75, y: y - r * 0.9 + Math.sin(a) * r * 0.55 }], { couleur, epaisseur: 1, graine: graine + k, amp: 0.3 });
-      }
-      yeux(ctx, x, y - r * 0.9, r * 0.32, true, PAPIER);
+      // L'esperluette géante, sur huit pattes
+      pattes(ctx, x, y + r * 0.6, 8, r * 0.95, r * 0.45, age * 1.4, couleur, g);
+      lettre(ctx, "&", x, y, r * 2.6, couleur, g, 4);
+      yeux(ctx, x + r * 0.05, y - r * 0.45, r * 0.2, r * 0.15, regard, g, true);
       break;
     }
     case "postit": {
-      jambes(ctx, x, y + r, r, age, couleur, graine);
-      trait(ctx, [{ x: x - r, y: y - r }, { x: x + r, y: y - r }, { x: x + r, y: y + r * 0.4 }, { x: x + r * 0.4, y: y + r }, { x: x - r, y: y + r }], { ...o, ferme: true, fond: "rgba(196,48,43,0.07)" });
-      const coin = 0.4 + Math.sin(age * 4 + graine) * 0.12;
-      trait(ctx, [{ x: x + r, y: y + r * 0.4 }, { x: x + r * coin, y: y + r * coin }, { x: x + r * 0.4, y: y + r }], { ...o, epaisseur: 1.2, fond: "rgba(196,48,43,0.15)" });
-      yeux(ctx, x - r * 0.1, y, r * 0.8, false, couleur);
+      // Un mot qui avance derrière une grosse parenthèse tenue comme un bouclier
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      pattes(ctx, x, y + r * 0.7, 2, r * 0.35, r * 0.5, age, couleur, g);
+      lettre(ctx, "mot", x - c * r * 0.2, y - s * r * 0.2, r * 2.2, couleur, g);
+      yeux(ctx, x - c * r * 0.2, y - s * r * 0.2 - r * 0.55, r * 0.3, r * 0.22, regard, g);
+      // La parenthèse, toujours devant lui, tournée vers où il va
+      ctx.save();
+      ctx.translate(x + c * r * 1.05, y + s * r * 1.05);
+      ctx.rotate(angle);
+      lettre(ctx, ")", 0, 0, r * 3.4, couleur, g + 3, 3);
+      ctx.restore();
       break;
     }
     case "fantome": {
-      const pts = [];
-      for (let i = 0; i <= 12; i++) {
-        const a = Math.PI + (i / 12) * Math.PI;
-        pts.push({ x: x + Math.cos(a) * r, y: y - r * 0.1 + Math.sin(a) * r });
-      }
-      for (let i = 0; i <= 6; i++) pts.push({ x: x + r - (i / 6) * 2 * r, y: y + r * 0.9 + (i % 2 ? -r * 0.3 : 0) + Math.sin(age * 6 + i) * 1.2 });
-      trait(ctx, pts, { ...o, ferme: true, couleur: couleur === ROUGE ? CRAYON : couleur, epaisseur: 1.4 });
-      yeux(ctx, x, y - r * 0.15, r, false, couleur === ROUGE ? CRAYON : couleur);
+      // Le h muet, écrit au crayon : à peine visible
+      const gris = couleur === ROUGE ? "#55576a" : couleur;
+      const a = couleur === ROUGE ? 0.55 : 0.9;
+      pattes(ctx, x, y + r * 0.85, 2, r * 0.38, r * 0.5, age, gris, g, a * 0.7);
+      lettre(ctx, "h", x, y, r * 3.6, gris, g, 1, a);
+      yeux(ctx, x + r * 0.1, y - r * 0.45, r * 0.34, r * 0.26, regard, g, false, a);
       break;
     }
     case "tippex": {
-      jambes(ctx, x, y + r, r * 0.9, age, couleur, graine);
-      rectangle(ctx, x - r * 0.7, y - r * 0.6, r * 1.4, r * 1.6, { ...o, fond: "rgba(255,255,255,0.9)" });
-      rectangle(ctx, x - r * 0.35, y - r * 1.1, r * 0.7, r * 0.5, o);
-      trait(ctx, [{ x: x - r * 0.35, y: y + r * 0.2 }, { x: x + r * 0.35, y: y + r * 0.2 }], { ...o, epaisseur: 2.2 });
-      trait(ctx, [{ x, y: y - r * 0.15 }, { x, y: y + r * 0.55 }], { ...o, epaisseur: 2.2 });
+      // Le plus qui soigne
+      pattes(ctx, x, y + r * 0.6, 2, r * 0.4, r * 0.5, age, couleur, g);
+      lettre(ctx, "+", x, y, r * 3.6, couleur, g, 4);
+      yeux(ctx, x, y - r * 0.1, r * 0.34, r * 0.24, regard, g);
       break;
     }
     case "punaise": {
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
-      trait(ctx, [{ x, y }, { x: x + c * r * 1.6, y: y + s * r * 1.6 }], { ...o, epaisseur: 1.4 });
-      cercle(ctx, x - c * r * 0.2, y - s * r * 0.2, r * 0.85, { ...o, fond: "rgba(196,48,43,0.35)" });
-      cercle(ctx, x - c * r * 0.2, y - s * r * 0.2, r * 0.4, { ...o, epaisseur: 1.2 });
+      // Le point d'exclamation, penché vers la tour qu'il charge
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.cos(angle) * 0.25);
+      pattes(ctx, 0, r * 1.15, 2, r * 0.35, r * 0.55, age * 1.4, couleur, g);
+      lettre(ctx, "!", 0, 0, r * 3.8, couleur, g, 4);
+      yeux(ctx, 0, -r * 0.75, r * 0.36, r * 0.27, regard, g, true);
+      ctx.restore();
       break;
     }
     case "taille": {
-      rectangle(ctx, x - r, y - r * 0.75, r * 2, r * 1.5, { ...o, epaisseur: 2.6, fond: "rgba(196,48,43,0.12)" });
-      cercle(ctx, x - r * 0.35, y, r * 0.42, { ...o, epaisseur: 2.2, fond: PAPIER });
-      trait(ctx, [{ x: x + r * 0.15, y: y - r * 0.55 }, { x: x + r * 0.85, y: y + r * 0.55 }], { ...o, epaisseur: 3 });
-      for (let k = 0; k < 4; k++) {
-        const a = age * 8 + (k * Math.PI) / 2;
-        trait(ctx, [{ x: x - r * 0.35, y }, { x: x - r * 0.35 + Math.cos(a) * r * 0.36, y: y + Math.sin(a) * r * 0.36 }], { couleur, epaisseur: 1, graine: graine + k });
-      }
-      yeux(ctx, x + r * 0.45, y - r * 0.05, r * 0.5, true, couleur);
+      // L'Œ blindé : hachuré comme une armure, sur quatre pattes lourdes
+      pattes(ctx, x, y + r * 0.75, 4, r * 0.6, r * 0.4, age * 0.7, couleur, g);
+      lettre(ctx, "Œ", x, y, r * 2.4, couleur, g, 4);
+      const armure = [{ x: x - r * 0.95, y: y - r * 0.75 }, { x: x + r * 0.95, y: y - r * 0.75 }, { x: x + r * 0.95, y: y + r * 0.6 }, { x: x - r * 0.95, y: y + r * 0.6 }];
+      hachures(ctx, armure, "rgba(60,62,75,0.35)", 5, 1.2, 1);
+      yeux(ctx, x - r * 0.3, y - r * 0.2, r * 0.2, r * 0.15, regard, g, true);
       break;
     }
   }

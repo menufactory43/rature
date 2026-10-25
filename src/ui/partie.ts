@@ -676,9 +676,9 @@ function astuce(p: Partie): string | null {
   }
   if (id === "1-2" && j.vague <= 2) return "Des murs en travers du zigzag : plus le chemin est long, plus tes tours tirent.";
   const present = (t: TypeEnnemi) => j.ennemis.some((e) => !e.mort && e.type === t);
-  if (id === "1-3" && present("avion")) return "Les avions volent par-dessus les murs. Les ratures les arrêtent.";
+  if (id === "1-3" && present("avion")) return "Les avions de dictée volent par-dessus les murs. Les ratures les arrêtent.";
   if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
-  if (id === "1-4" && present("tache")) return "Les taches rongent les murs, et se divisent en mourant.";
+  if (id === "1-4" && present("tache")) return "Les fautes rongent les murs, et éclatent en lettres quand on les rature.";
   if (id === "2-1" && j.vague <= 2) return "Les cadres « ne rien écrire » : la horde y passe, mais aucune tour ne s'y pose.";
   // Les pouvoirs, la première fois qu'on les a
   const nouveau = (k: Pouvoir, page: string) => id === page && j.vague >= 2 && j.recharges[k] <= 0 && j.options.pouvoirs?.includes(k);

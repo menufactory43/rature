@@ -143,7 +143,7 @@ export function absorber(j: Jeu, dt: number): void {
           secouer(12);
           fx.flash = 0.6;
           fx.flashCouleur = BLEU;
-          banniere(`${f.nom} raturé${f.nom.startsWith("la ") ? "e" : ""} !`, undefined, false, 2);
+          banniere(`${f.nom} raturé${f.nom.startsWith("la ") || f.nom.includes("Esperluette") ? "e" : ""} !`, undefined, false, 2);
           for (let k = 0; k < 18; k++) ajouter("papier", e.x, e.y, { vx: hasard(-200, 200), vy: hasard(-200, 200), vie: hasard(0.8, 1.4), r: hasard(3, 6), vr: hasard(-10, 10), couleur: "#fffaf0" });
         }
         break;
