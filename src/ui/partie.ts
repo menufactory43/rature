@@ -17,7 +17,7 @@ import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
   PAS_SIM, choisirFourniture, fournitureDue, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
-import { PAGES, TEXTE_DEFI, type Page } from "../sim/pages";
+import { PAGES, TEXTE_DEFI, optionsDePage, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
 import { resume, type PlanVague } from "../sim/vagues";
 import { enregistrer, noterPage, sauvegarde } from "../progression";
@@ -28,8 +28,10 @@ import { BANDE, BAS_PORTRAIT, HAUT_PORTRAIT, PANNEAU_W, ecranDans, type Vue } fr
 import type { Lockstep, Action } from "../coop/lockstep";
 import { aplatir, empreinte, jouerTour, type Commun } from "../coop/partage";
 import { ouvrirReglages } from "./reglages";
+import { avancerTuto, creerTuto, dessinerTuto, toucherTuto, tutoApres, tutoRefuse, type Tuto } from "./tuto";
+import { marquerTutoVu } from "../sauvegarde";
 
-export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop";
+export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop" | "tuto";
 
 /** La coop : le lockstep, ce que les deux partagent, et de quoi parler à l'autre (branché par coop/session.ts). */
 export interface CoopPartie {
@@ -91,9 +93,14 @@ interface Partie {
   coop: CoopPartie | null;
   /** Mes traits partis en coop, qui attendent leur tour pour être joués. */
   enAttente: Pt[][];
+  /** Le tutoriel, quand c'en est un. */
+  tuto: Tuto | null;
 }
 
 export let partie: Partie | null = null;
+
+/** Ce que main branche ici : lancer la page 1-1 à la fin du tutoriel. */
+export const crochets = { pageUne: () => {} };
 
 export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode: Mode; libelle: string; cleJour?: string; coop?: CoopPartie }): void {
   const jeu = nouveauJeu(options());
@@ -101,7 +108,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [],
+    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [], tuto: null,
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -109,8 +116,18 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
   audio.jouer(["page"]);
 }
 
+/** Le tutoriel : la page 1-1, une seule tour, et Bille qui mène tout. */
+export function lancerTuto(): void {
+  const page = PAGES[0];
+  demarrerPartie(() => ({ ...optionsDePage(page, { toursDispo: ["plume"], colle: true }), regles: { graine: 7, total: 99, pool: ["gribouille"], difficulte: 1, entrees: 1 }, encreDepart: 160, vies: 20 }), { mode: "tuto", libelle: "Tutoriel" });
+  if (!partie) return;
+  partie.fiches = [];
+  partie.tuto = creerTuto(partie.jeu);
+}
+
 function recommencer(): void {
   if (!partie) return;
+  if (partie.mode === "tuto") return lancerTuto();
   demarrerPartie(partie.options, { page: partie.page ?? undefined, mode: partie.mode, libelle: partie.libelle, cleJour: partie.cleJour });
 }
 
@@ -186,7 +203,10 @@ export function avancerPartie(dt: number): void {
     });
   } else {
     if (p.pause || p.fiches.length) return;
-    p.reste += dt * (j.phase === "jeu" ? p.vitesse : 1);
+    if (p.tuto) {
+      p.tuto.menu = p.selection ? (p.selection.y > PAGE_H / 2 ? "haut" : "bas") : null;
+      p.reste += dt * avancerTuto(p.tuto, j, dt) * p.vitesse;
+    } else p.reste += dt * (j.phase === "jeu" ? p.vitesse : 1);
     let n = 0;
     while (p.reste >= PAS && n++ < 20) {
       step(j, PAS);
@@ -258,6 +278,7 @@ function terminer(p: Partie): void {
 export function toucherPartie(x: number, y: number, e: PointerEvent): boolean {
   const p = partie;
   if (!p || p.pause || p.fin) return false;
+  if (p.tuto && toucherTuto(p.tuto, p.jeu)) return true;
   if (p.fiches.length) {
     marquerAppris(p.fiches.shift()!);
     return true;
@@ -365,7 +386,14 @@ export function leverPartie(e: PointerEvent): void {
     }
     return;
   }
+  // Le tutoriel n'accepte que le geste qu'il demande (rien n'est dépensé sinon)
+  if (p.tuto && tutoRefuse(p.tuto, trace)) {
+    vibrer("refus");
+    fx.ajouterTrace(trace, null, CRAYON);
+    return;
+  }
   const r = appliquerTrace(j, trace);
+  if (p.tuto) tutoApres(p.tuto, r);
   if (r.ok) p.selection = null;
   if (!r.ok && r.geste !== "rien") vibrer("refus");
   if (r.geste === "tour" || r.geste === "rien" || !r.ok) {
@@ -480,6 +508,23 @@ export function dessinerPartie(v: Vue): void {
   if (j.choix) choixFournitures(p, j.choix);
   else p.choixDepuis = 0;
   if (p.selection) menuTour(p, p.selection);
+  if (p.tuto) {
+    dessinerTuto(ctx, p.tuto, j, portrait, {
+      passer: () => {
+        marquerTutoVu();
+        nav.aller("titre");
+      },
+      finir: (rejouer) => {
+        marquerTutoVu();
+        if (rejouer) lancerTuto();
+        else nav.aller("titre");
+      },
+      page: () => {
+        marquerTutoVu();
+        crochets.pageUne();
+      },
+    });
+  }
   // Les fenêtres : sur toute la feuille en portrait et avec la bande, sur la page de droite du cahier ouvert
   ctx.save();
   ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
@@ -612,6 +657,8 @@ const DUREE_POSTIT = 7;
 
 /** Le post-it « nouveau ! » : collé en haut de la page au premier passage d'un monstre jamais vu. */
 function postitNouveau(p: Partie): void {
+  // Pendant le tutoriel, c'est Bille qui présente
+  if (p.tuto) return;
   const j = p.jeu;
   for (const e of j.ennemis) {
     if (e.mort || sauvegarde.vus.includes(e.type) || e.y < 0) continue;
@@ -852,11 +899,12 @@ function bandeauHaut(p: Partie): void {
   bouton(8, y - 15, 38, 30, "II", () => mettrePause(p, true), { taille: 17 });
   ecrire(ctx, "♥", 62, y, { couleur: ROUGE, taille: 22 });
   ecrire(ctx, String(j.vies), 76, y + 1, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
-  const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
-  ecrire(ctx, `vague ${Math.max(1, j.vague)}${total}`, 112, y + 1, { align: "left", taille: 19 });
+  const total = Number.isFinite(j.regles.total) && !p.tuto ? `/${j.regles.total}` : "";
+  ecrire(ctx, p.tuto ? "tutoriel" : `vague ${Math.max(1, j.vague)}${total}`, 112, y + 1, { align: "left", taille: 19 });
   bouton(W - 50, y - 15, 42, 30, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   const droite = W - 58;
-  if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
+  if (p.tuto) ecrire(ctx, "avec Bille, tout doucement", droite - 4, y, { align: "right", taille: 14, couleur: CRAYON });
+  else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     const bonus = Math.round(j.prochaine * 2);
     bouton(droite - 150, y - 14, 146, 28, `▸ vague ${j.vague + 1} · ${Math.ceil(j.prochaine)} s (+${bonus})`, () => appelerVague(p), { taille: 13 });
   } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", droite - 4, y, { align: "right", taille: 15, couleur: ROUGE });
@@ -952,10 +1000,11 @@ function bande(p: Partie): { x: number; y: number } {
   bouton(54, 8, 40, 34, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
   ecrire(ctx, String(j.vies), 40, 69, { align: "left", couleur: ROUGE, taille: 28, police: "titre" });
-  const total = Number.isFinite(j.regles.total) ? `/${j.regles.total}` : "";
-  ecrire(ctx, "vague", w / 2, 96, { taille: 13, couleur: CRAYON });
-  ecrire(ctx, `${Math.max(1, j.vague)}${total}`, w / 2, 116, { police: "titre", taille: 24 });
-  if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => appelerVague(p), { principal: true, sous: "vague 1" , taille: 20 });
+  const total = Number.isFinite(j.regles.total) && !p.tuto ? `/${j.regles.total}` : "";
+  ecrire(ctx, p.tuto ? "tutoriel" : "vague", w / 2, 96, { taille: 13, couleur: CRAYON });
+  if (!p.tuto) ecrire(ctx, `${Math.max(1, j.vague)}${total}`, w / 2, 116, { police: "titre", taille: 24 });
+  if (p.tuto) { /* le tutoriel n'appelle pas de vague */ }
+  else if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => appelerVague(p), { principal: true, sous: "vague 1" , taille: 20 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     bouton(8, 136, w - 16, 52, `▸ ${j.vague + 1}`, () => appelerVague(p), { sous: `${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)}`, taille: 20 });
   } else if (j.phase === "jeu" && !j.plan) paragraphe(ctx, "dernière vague !", w / 2, 150, w - 12, { taille: 15, couleur: ROUGE });
@@ -997,9 +1046,9 @@ function panneau(p: Partie): { x: number; y: number } {
   // Les vies, la vague, l'encre
   ecrire(ctx, "♥", x0 + 8, 86, { couleur: ROUGE, taille: 30 });
   ecrire(ctx, String(j.vies), x0 + 28, 87, { align: "left", couleur: ROUGE, taille: 36, police: "titre" });
-  const total = Number.isFinite(j.regles.total) ? ` sur ${j.regles.total}` : "";
-  ecrire(ctx, "vague", x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
-  ecrire(ctx, `${Math.max(1, j.vague)}${total}`, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
+  const total = Number.isFinite(j.regles.total) && !p.tuto ? ` sur ${j.regles.total}` : "";
+  ecrire(ctx, p.tuto ? "tutoriel" : "vague", x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, p.tuto ? "Bille" : `${Math.max(1, j.vague)}${total}`, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
   compteurEncre(p, x0 + 236, 86, 36, x0 + 262, 116);
   ligne(ctx, { x: x0 - 10, y: 128 }, { x: droite, y: 128 }, { couleur: CRAYON, epaisseur: 1.1, graine: 83 });
   // La vague qui vient : qui, combien, et comment les prendre
@@ -1021,7 +1070,8 @@ function panneau(p: Partie): { x: number; y: number } {
     }
   }
   y = Math.max(y, 262);
-  if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => appelerVague(p), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
+  if (p.tuto) { /* le tutoriel n'appelle pas de vague */ }
+  else if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => appelerVague(p), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     bouton(x0, y, droite - x0, 46, `▸ Appeler la vague ${j.vague + 1}`, () => appelerVague(p), { sous: `elle arrive dans ${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)} d'encre si tu l'appelles`, taille: 20 });
   } else if (j.phase === "jeu" && j.plan) ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", x0, y + 20, { align: "left", taille: 16, couleur: fournitureDue(j) ? ROUGE : CRAYON });

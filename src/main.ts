@@ -22,7 +22,7 @@ import { nav } from "./ui/nav";
 import { dessinerReglages } from "./ui/reglages";
 import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
-import { basculerPause, avancerPartie, demarrerPartie, dessinerPartie, glisserPartie, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
+import { basculerPause, avancerPartie, crochets, demarrerPartie, dessinerPartie, glisserPartie, lancerTuto, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
 import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, toucherTrousse } from "./ui/trousse";
 
 const canvas = document.getElementById("jeu") as HTMLCanvasElement;
@@ -94,6 +94,8 @@ function interro(): void {
 }
 
 actions.jouerPage = jouerPage;
+actions.tuto = lancerTuto;
+crochets.pageUne = () => jouerPage(PAGES[0], "campagne");
 actions.interro = interro;
 actions.pageDuJour = pageDuJour;
 nav.ouvrirPage = (p) => jouerPage(p, "campagne");

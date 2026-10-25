@@ -10,7 +10,8 @@ import { TOURS, TYPES_TOURS } from "../sim/tours";
 import {
   IDS_TALENTS, TALENTS, enregistrer, pageGagnee, pageOuverte, pointsLibres, sauvegarde, toursDebloquees, totalEtoiles,
 } from "../progression";
-import { grainePageDuJour } from "../sauvegarde";
+import { grainePageDuJour, tutoVu } from "../sauvegarde";
+import { bille } from "../render/bille";
 import { H, W, bouton, boutonSon, titre, ui, zone } from "./base";
 import { nav } from "./nav";
 import { ouvrirReglages } from "./reglages";
@@ -18,6 +19,7 @@ import { ouvrirCoop } from "./coop";
 import { etoile } from "./partie";
 
 export const actions = {
+  tuto: () => {},
   pageDuJour: () => {},
   interro: () => {},
   jouerPage: (_p: Page, _mode: "campagne" | "defi" | "sansFin") => {},
@@ -38,6 +40,15 @@ export function dessinerTitre(): void {
   const souligne = Math.max(0, Math.min(1, (t - 0.8) / 0.35));
   if (souligne > 0) trait(ctx, [{ x: 90, y: 204 }, { x: 90 + 110 * Math.min(1, souligne * 2), y: 208 }, ...(souligne > 0.5 ? [{ x: 90 + 220 * souligne, y: 202 }] : [])], { couleur: ROUGE, epaisseur: 2.4, graine: 2 });
   ecrire(ctx, "un tower defense au stylo bille", W / 2, 236, { couleur: CRAYON, taille: 18, alpha: Math.min(1, Math.max(0, (t - 1) * 2)) });
+  // Bille, la mascotte, à côté du titre : la première fois, elle propose le tutoriel
+  const salut = t % 6 < 1.2;
+  bille(ctx, 44, 252, 92, t, { joie: salut, regard: 0.6, parle: !tutoVu() && t % 4 < 1.5 });
+  zone(14, 150, 64, 110, () => actions.tuto());
+  if (!tutoVu() && t > 1.2) {
+    feuille(ctx, 74, 30, W - 148, 58, "rgba(253,250,240,0.96)", 12, 0.18);
+    paragraphe(ctx, "Première fois ? Touche-moi : je t'explique tout, tout doucement.", 84, 40, W - 168, { align: "left", taille: 16, couleur: "#2a2a35" });
+    zone(74, 30, W - 148, 58, () => actions.tuto());
+  }
   // Une petite bataille : les monstres passent, les tours tirent, et ils se font raturer
   const types: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "punaise", "postit"];
   const MORT = 262;
@@ -154,7 +165,8 @@ export function dessinerAide(): void {
       paragraphe(ctx, f.conseil, 68, y + 3, 316, { align: "left", taille: 12, couleur: CRAYON });
     });
   }
-  bouton(120, H - 62, 160, 44, "Retour", () => nav.aller("titre"));
+  bouton(24, H - 62, 160, 44, "Retour", () => nav.aller("titre"));
+  bouton(W - 184, H - 62, 160, 44, "Le tutoriel", () => actions.tuto(), { principal: true, taille: 19 });
 }
 
 // --- Les cahiers ---
