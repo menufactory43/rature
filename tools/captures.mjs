@@ -26,7 +26,7 @@ for (const langue of ["fr", "en"]) {
       await page.evaluate(({ langue, DITS, o }) => {
         localStorage.clear();
         if (!o.tutoNonVu) localStorage.setItem("rature.tuto", "vu");
-        localStorage.setItem("rature.reglages", JSON.stringify({ langue, musique: 0, effets: 0 }));
+        localStorage.setItem("rature.reglages", JSON.stringify({ langue, musique: 0, effets: 0, bille: !o.sansBulles }));
         localStorage.setItem("rature.bille", JSON.stringify(DITS));
         const et = {};
         for (const c of [1, 2, 3, 4]) for (let i = 1; i <= 5; i++) et[`${c}-${i}`] = o.vierge ? 0 : c < 4 || i < 3 ? 3 : 2;
@@ -84,7 +84,7 @@ for (const langue of ["fr", "en"]) {
         p.vitesse = 2;
       }, { tours, o });
       await page.waitForTimeout(attente);
-      await page.evaluate(() => { window.rature.partie.vitesse = 1; });
+      await page.evaluate((o) => { window.rature.partie.vitesse = 1; if (o.muette) window.rature.taire(); }, o);
     };
 
     // 1. Le titre
@@ -92,12 +92,12 @@ for (const langue of ["fr", "en"]) {
     await page.waitForTimeout(2200);
     await shot(1);
     // 2. Une bataille dans le cahier de brouillon
-    await preparer();
-    await bataille("1-3", ["plume", "roquette", "foudre", "plume", "spirale"], 5200);
+    await preparer({ sansBulles: true });
+    await bataille("1-3", ["plume", "roquette", "foudre", "plume", "spirale"], 5200, { muette: true });
     await shot(2);
     // 3. Un boss dans le cahier de musique
-    await preparer();
-    await bataille("3-5", ["correction", "roquette", "foudre", "scie", "encrier", "roquette"], 7000, { vague: 25, encre: 488 });
+    await preparer({ sansBulles: true });
+    await bataille("3-5", ["correction", "roquette", "foudre", "scie", "encrier", "roquette"], 7000, { vague: 25, encre: 488, muette: true });
     await shot(3);
     // 4. Les cahiers
     await preparer();

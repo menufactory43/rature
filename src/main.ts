@@ -21,7 +21,7 @@ import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
 import { RELIURE, calculer, ecranDans, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
 import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
-import { compagnonMenu, dessinerScene, glisser as glisserBille, lacher as lacherBille, saisir as saisirBille } from "./ui/compagnon";
+import { compagnonMenu, dessinerScene, glisser as glisserBille, lacher as lacherBille, saisir as saisirBille, taire } from "./ui/compagnon";
 import { dessinerReglages } from "./ui/reglages";
 import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
@@ -316,4 +316,5 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.service
   pages: PAGES,
   sim: { poserTour, ameliorer, lancerVague, blesser, lancerPouvoir, choisirFourniture },
   interro,
+  taire,
 };

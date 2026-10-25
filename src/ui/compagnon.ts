@@ -273,7 +273,7 @@ const INTROS: Partial<Record<EcranMenu, [string, Humeur?]>> = {
 
 /** Où se tient Bille sur chaque écran : dans un coin libre. */
 const PLACES: Partial<Record<EcranMenu, Omit<Place, "touche">>> = {
-  campagne: { x: 22, y: 772, h: 58 },
+  campagne: { x: W - 26, y: 72, h: 52 },
   aide: { x: W / 2, y: H - 18, h: 48 },
 };
 
