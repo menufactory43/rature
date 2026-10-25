@@ -14,6 +14,8 @@ import { TYPES_TOURS } from "./sim/tours";
 import { colleDebloquee, effacer, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
+import { synchroniser } from "./progression";
+import { connecterGameCenter } from "./succes";
 import { surChangement } from "./reglages";
 import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
 import { RELIURE, calculer, ecranDans, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
@@ -287,6 +289,8 @@ function image(maintenant: number): void {
 
 redimensionner();
 chargerApparences();
+// L'app iPhone : la sauvegarde d'iCloud, puis Game Center
+void synchroniser().then(() => chargerApparences()).finally(() => void connecterGameCenter());
 // Un lien de salon (…/?salon=ABCD) : on rejoint directement son ami
 const salon = new URLSearchParams(location.search).get("salon");
 if (salon) ouvrirCoop(salon);

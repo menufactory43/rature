@@ -12,6 +12,7 @@ import {
 } from "../progression";
 import { grainePageDuJour, tutoVu } from "../sauvegarde";
 import { compagnonTitre } from "./compagnon";
+import { gameCenterDispo, ouvrirGameCenter } from "../succes";
 import { H, W, bouton, boutonSon, titre, ui, zone } from "./base";
 import { nav } from "./nav";
 import { ouvrirReglages } from "./reglages";
@@ -112,6 +113,8 @@ export function dessinerTitre(): void {
   bouton(60, 702, 134, 44, "À deux", () => ouvrirCoop(), { taille: 19 });
   bouton(206, 702, 134, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
   boutonSon(W - 54, 14);
+  // Les classements et les succès de Game Center, sur l'iPhone
+  if (gameCenterDispo()) bouton(W - 104, 14, 44, 32, "🏆", ouvrirGameCenter, { taille: 17 });
   paragraphe(ctx, "Dessine tes tours. Trace des murs. Rature les monstres.", W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
 }
 

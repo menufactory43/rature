@@ -1,4 +1,5 @@
 // L'écran de jeu : la page, les bandeaux, le pense-bête des symboles, le menu des tours, la pause et la fin.
+import { debloquer, finDePage, surveiller } from "../succes";
 import { astuceDe, billeActive, conseil, dire, observerPartie, placer, refusBille, toucherBille } from "./compagnon";
 import * as audio from "../audio";
 import * as fx from "../render/fx";
@@ -218,6 +219,7 @@ export function avancerPartie(dt: number): void {
   }
   audio.jouer(j.sons);
   j.sons.length = 0;
+  surveiller(j);
   fx.absorber(j, dt);
   if (p.selection && !j.tours.includes(p.selection)) p.selection = null;
   if ((j.phase === "gagne" || j.phase === "perdu") && !p.fin) {
@@ -227,6 +229,15 @@ export function avancerPartie(dt: number): void {
 }
 
 function terminer(p: Partie): void {
+  terminerPage(p);
+  const j = p.jeu;
+  finDePage({
+    mode: p.mode, pageId: p.page?.id, gagne: j.phase === "gagne", fuites: j.stats.fuites, defi: p.mode === "defi" && j.phase === "gagne",
+    vagues: j.phase === "gagne" ? j.regles.total : j.vague - 1, vies: j.vies, total: j.regles.total, joursJoues: Object.keys(sauvegarde.jour).length,
+  });
+}
+
+function terminerPage(p: Partie): void {
   const j = p.jeu;
   p.fin = true;
   p.finDepuis = ui.temps;
@@ -536,11 +547,13 @@ export function dessinerPartie(v: Vue): void {
       },
       finir: (rejouer) => {
         marquerTutoVu();
+        debloquer("rature.tuto");
         if (rejouer) lancerTuto();
         else nav.aller("titre");
       },
       page: () => {
         marquerTutoVu();
+        debloquer("rature.tuto");
         crochets.pageUne();
       },
     });

@@ -1,5 +1,7 @@
 // Ce qui reste d'une page à l'autre : les meilleurs résultats, et si le tuto a été vu.
 
+import { enregistrer as enregistrerProgression, sauvegarde } from "./progression";
+
 export interface Resultat {
   vagues: number;
   note: number;
@@ -34,5 +36,12 @@ export function enregistrer(cle: string, r: Resultat): boolean {
   return record;
 }
 
-export const tutoVu = () => localStorage.getItem("rature.tuto") === "vu";
-export const marquerTutoVu = () => localStorage.setItem("rature.tuto", "vu");
+// Le tuto vu voyage avec la sauvegarde (iCloud) : un « appris » de plus
+export const tutoVu = () => localStorage.getItem("rature.tuto") === "vu" || sauvegarde.appris.includes("tuto");
+export function marquerTutoVu(): void {
+  localStorage.setItem("rature.tuto", "vu");
+  if (!sauvegarde.appris.includes("tuto")) {
+    sauvegarde.appris.push("tuto");
+    enregistrerProgression();
+  }
+}

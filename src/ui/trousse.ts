@@ -1,5 +1,6 @@
 // La trousse : on repasse le pochoir d'une tour au doigt, la prof tamponne « ACCEPTÉ », et ce dessin devient
 // l'apparence de la tour en jeu. Purement esthétique.
+import { debloquer } from "../succes";
 import { BLEU, CRAYON, ROUGE, ecrire, paragraphe, boite, trait } from "../render/encre";
 import { dessinerTour, reglerApparences } from "../render/tours";
 import type { V } from "../sim/geom";
@@ -105,6 +106,7 @@ export function dessinerTrousse(): void {
   }, { taille: 18 });
   bouton(268, H - 120, 112, 46, "Valider", () => {
     if (couverture(t) < 0.7) return;
+    debloquer("rature.trousse");
     sauvegarde.apparences[t] = traits.map((s) => s.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 })));
     enregistrer();
     chargerApparences();
