@@ -157,6 +157,10 @@ export interface Place {
   humeur?: Humeur;
   montre?: { x: number; y: number };
   alpha?: number;
+  /** Seulement la bulle : le corps est dessiné ailleurs (Bille sur la page, par la scène). */
+  sansCorps?: boolean;
+  /** Ne se prend pas au doigt (c'est la partie qui la déplace). */
+  immobile?: boolean;
 }
 
 /** Depuis combien de temps rien ne s'est passé. */
@@ -190,7 +194,7 @@ export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place, glis
   const e = ennui();
   const dort = active && !texte && e > DORT;
   const salue = !texte && !dort && e < 12 && t % 7 < 1.1;
-  bille(ctx, pl.x, pl.y, pl.h, t, {
+  if (!pl.sansCorps) bille(ctx, pl.x, pl.y, pl.h, t, {
     joie: pl.humeur === "joie" || (humeur === "joie" ? depuis < 2 : salue),
     triste: humeur === "triste",
     surprise: humeur === "surprise" && (!!pl.humeur || depuis < 2.5),
@@ -322,6 +326,8 @@ export interface InfoPartie {
   nouveaux: number;
   /** Un doigt dessine. */
   dessine: boolean;
+  /** Bille est sur la page. */
+  heros: boolean;
   tuto: () => void;
 }
 
@@ -360,8 +366,10 @@ export function observerPartie(j: Jeu, info: InfoPartie): void {
       : info.nouvellePage ? `${info.nouvellePage}. Une nouvelle page ! Prends le temps de regarder le chemin.`
       : info.mode === "sansFin" ? "Sans fin : on tient le plus longtemps possible. Courage !"
       : tirer(["On remet ça ?", "Allez, cette fois c'est la bonne.", "Je sens que ça va bien se passer."]);
-    // La toute première fois, elle se présente : et dit comment la faire taire
-    if (!dire("Coucou, c'est Bille ! Touche-moi pour une astuce… ou pour me cacher si je t'embête.", { cle: "presentation", unique: true, urgent: true, duree: 6, humeur: "joie" }))
+    // La toute première fois, elle se présente : et dit comment la faire taire ; puis, la première fois sur la page, comment la déplacer
+    if (info.heros && dire("Je descends sur la page avec toi ! Fais-moi glisser du doigt pour m'envoyer barrer la route aux monstres.", { cle: "heros-intro", unique: true, urgent: true, duree: 7, humeur: "joie" })) {
+      /* déjà dit */
+    } else if (!dire("Coucou, c'est Bille ! Touche-moi pour une astuce… ou pour me cacher si je t'embête.", { cle: "presentation", unique: true, urgent: true, duree: 6, humeur: "joie" }))
       dire(accueil, { urgent: true, duree: 4.5, humeur: "joie" });
   }
   const st = j.stats;
@@ -459,7 +467,7 @@ export function dessinerScene(ctx: CanvasRenderingContext2D, reperes: Record<Rep
 export function saisir(px: number, py: number): boolean {
   activite();
   const d = dessinee;
-  if (!d) return false;
+  if (!d || d.pl.immobile) return false;
   const q = d.m.inverse().transformPoint({ x: px, y: py });
   const { x, y, h } = d.pl;
   if (Math.abs(q.x - x) > h * 0.34 || q.y < y - h * 1.12 || q.y > y + 6) return false;

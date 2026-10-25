@@ -2,7 +2,8 @@
 import type { Carte } from "../sim/carte";
 import { ENNEMIS } from "../sim/ennemis";
 import type { V } from "../sim/geom";
-import { positionLame, segmentRegle, stats, zoneGomme, type Ennemi, type Jeu, type Tour } from "../sim/jeu";
+import { positionLame, segmentRegle, stats, zoneGomme, type Ennemi, type Heros, type Jeu, type Tour } from "../sim/jeu";
+import { bille } from "./bille";
 import { hash3 } from "../sim/rng";
 import { PORTEE_INFINIE, RAYON_TOUR } from "../sim/tours";
 import { ENCRE_BLEUE, coulure, eclabousser, eclatRouge, flaque, type Goutte } from "./tache";
@@ -306,6 +307,48 @@ export interface Brouillon {
   couleur?: string;
 }
 
+/** Bille sur la page : debout, ses coups de stylo, sa vie et son niveau ; tombée, une silhouette qui attend au Cœur. */
+function heros(ctx: CanvasRenderingContext2D, j: Jeu, h: Heros): void {
+  const H = 40;
+  if (h.mort > 0) {
+    const c = j.carte.coeur;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    bille(ctx, c.x + 26, c.y + 10, H * 0.8, j.temps, { triste: true });
+    ctx.restore();
+    ecrire(ctx, `${Math.ceil(h.mort)} s`, c.x + 26, c.y + 22, { taille: 13, couleur: CRAYON });
+    return;
+  }
+  // La destination, en pointillés
+  if (h.cible) {
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = "rgba(34,64,143,0.45)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(h.x, h.y);
+    ctx.lineTo(h.cible.x, h.cible.y);
+    ctx.stroke();
+    ctx.restore();
+    cercle(ctx, h.cible.x, h.cible.y, 6, { couleur: BLEU, epaisseur: 1.2, alpha: 0.6, graine: 501 });
+  }
+  const marche = h.cible ? Math.abs(Math.sin(j.temps * 12)) * 3 : 0;
+  const frappe = h.depuisFrappe < 0.25 && h.frappe ? h.frappe : undefined;
+  bille(ctx, h.x, h.y + 14 - marche, H, j.temps, { regard: h.regard, montre: frappe, joie: h.depuisFrappe < 0.15 });
+  // Le coup de stylo : un trait sec sur le monstre
+  if (frappe) {
+    const u = h.depuisFrappe / 0.25;
+    trait(ctx, [{ x: frappe.x - 9, y: frappe.y + 7 }, { x: frappe.x + 9, y: frappe.y - 7 }], { couleur: BLEU, epaisseur: 2.6, alpha: 1 - u, graine: Math.round(h.depuisFrappe * 100) });
+  }
+  // La vie et le niveau, au-dessus du capuchon
+  const y = h.y + 14 - H * 1.12 - 8;
+  ctx.fillStyle = "rgba(60,60,80,0.25)";
+  ctx.fillRect(h.x - 14, y, 28, 4);
+  ctx.fillStyle = h.pv / h.pvMax > 0.35 ? BLEU : ROUGE;
+  ctx.fillRect(h.x - 14, y, 28 * Math.max(0, h.pv / h.pvMax), 4);
+  ecrire(ctx, String(h.niveau), h.x + 21, y + 2, { taille: 13, police: "titre", couleur: BLEU });
+}
+
 export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillon | null, selection: Tour | null): void {
   // Les taches d'encre rouge laissées par les morts : de vraies flaques, peintes une fois, tournées au hasard
   ctx.save();
@@ -474,6 +517,7 @@ export function scene(ctx: CanvasRenderingContext2D, j: Jeu, brouillon: Brouillo
     // Un petit anneau rouge pour qu'on le repère dans la foule
     cercle(ctx, e.x, e.y, e.r + 6 + Math.sin(j.temps * 6) * 1.5, { couleur: ROUGE, epaisseur: 1.3, alpha: 0.7, graine: e.id + 9 });
   }
+  if (j.heros) heros(ctx, j, j.heros);
   // Les vies reprises qui reviennent en flottant vers le Cœur
   for (const r of j.rendus) {
     const dx = j.carte.coeur.x - r.x;

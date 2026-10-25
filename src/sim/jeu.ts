@@ -55,6 +55,8 @@ export interface Options {
   interro?: boolean;
   /** À deux : un peu plus d'encre, et des monstres plus solides. */
   coop?: boolean;
+  /** Bille descend sur la page : l'héroïne qu'on déplace au doigt. */
+  heros?: boolean;
 }
 
 // --- L'état ---
@@ -210,7 +212,9 @@ export type Evt =
   | { k: "rendu"; vies: number }
   | { k: "evade"; x: number; y: number; vies: number }
   | { k: "pouvoir"; p: Pouvoir; x: number; y: number; r: number; pts: V[]; touches: number }
-  | { k: "pret"; p: Pouvoir };
+  | { k: "pret"; p: Pouvoir }
+  | { k: "niveau"; n: number; x: number; y: number }
+  | { k: "tombe"; x: number; y: number };
 
 export interface Jeu {
   options: Options;
@@ -254,6 +258,30 @@ export interface Jeu {
   choix: Fourniture[] | null;
   choixFait: number;
   prises: string[];
+  /** Bille sur la page, si elle est de la partie. */
+  heros: Heros | null;
+}
+
+/** Bille, l'héroïne : elle marche où on l'envoie, tape ce qui passe près d'elle, retient la horde, et prend des niveaux. */
+export interface Heros {
+  x: number;
+  y: number;
+  /** Où on l'a envoyée (null : elle y est). */
+  cible: V | null;
+  pv: number;
+  pvMax: number;
+  niveau: number;
+  xp: number;
+  /** Secondes avant de revenir, quand elle est tombée (0 : debout). */
+  mort: number;
+  cd: number;
+  /** Le dernier coup : où, et depuis quand (pour l'animer). */
+  frappe: V | null;
+  depuisFrappe: number;
+  /** Depuis quand elle n'a plus été touchée (elle se soigne au calme). */
+  calme: number;
+  /** Vers où elle regarde (−1 gauche, 1 droite). */
+  regard: number;
 }
 
 export function nouveauJeu(options: Options): Jeu {
@@ -269,8 +297,9 @@ export function nouveauJeu(options: Options): Jeu {
     stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0 },
     prochainId: 1, sons: [], evts: [], rendus: [], recharges: { regle: 0, lasso: 0, gomme: 0 },
     boosts: Object.fromEntries(TYPES_TOURS_LISTE.map((t) => [t, boostNeutre()])) as Record<TypeTour, Boost>,
-    mods: { recharge: 1, pvMonstres: 1 }, choix: null, choixFait: 0, prises: [],
+    mods: { recharge: 1, pvMonstres: 1 }, choix: null, choixFait: 0, prises: [], heros: null,
   };
+  if (options.heros) j.heros = creerHeros(j);
   if (options.coop) {
     // Deux stylos pour une seule encre : on en donne un peu plus, et les monstres encaissent davantage
     j.encre *= 1.4;
@@ -692,6 +721,7 @@ function tuer(j: Jeu, e: Ennemi): void {
     }
   }
   j.encre += prime;
+  if (j.heros && !j.heros.mort && hypot(j.heros.x - e.x, j.heros.y - e.y) < 110) gagnerXp(j, j.heros, f.prime);
   if (e.vol > 0) {
     j.rendus.push({ x: e.x, y: e.y, vies: e.vol });
     effet(j, "texte", e.x, e.y - 20, 1.2, { texte: `${e.vol} ${e.vol > 1 ? "vies reprises" : "vie reprise"} !` });
@@ -769,6 +799,7 @@ export function step(j: Jeu, dt: number): void {
   }
 
   bougerEnnemis(j, dt);
+  if (j.heros) avancerHeros(j, j.heros, dt);
   tours(j, dt);
   bougerTirs(j, dt);
 
@@ -973,6 +1004,16 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     const n = hypot(e.vx, e.vy) || 1;
     const nx = e.x + (e.vx / n) * vitesse * dt;
     const ny = e.y + (e.vy / n) * vitesse * dt;
+    // Bille leur barre la route : les petits s'arrêtent et la mordent, les boss la bousculent en passant
+    const h = j.heros;
+    if (h && !h.mort && !f.vole && hypot(h.x - e.x, h.y - e.y) < e.r + RAYON_HEROS) {
+      h.pv -= Math.min(f.ronge, 40) * 0.6 * dt;
+      h.calme = 0;
+      if (!f.boss) {
+        e.bloque = true;
+        continue;
+      }
+    }
     if (!f.vole) {
       const seg = murBloquant(j, e, nx, ny);
       if (seg) {
@@ -1194,4 +1235,107 @@ function bougerTirs(j: Jeu, dt: number): void {
 export function etoiles(j: Jeu): number {
   if (j.phase !== "gagne") return 0;
   return j.vies >= j.viesMax - 2 ? 3 : j.vies >= j.viesMax / 2 ? 2 : 1;
+}
+
+// --- Bille, l'héroïne ---
+
+export const RAYON_HEROS = 12;
+const VITESSE_HEROS = 72;
+const PORTEE_HEROS = 30;
+const CADENCE_HEROS = 0.75;
+const RETOUR_HEROS = 10;
+/** L'expérience qu'il faut pour chaque niveau (niveau 1 au départ, 5 au plus). */
+export const XP_NIVEAUX = [0, 40, 120, 250, 450];
+export const NIVEAU_MAX = XP_NIVEAUX.length;
+export const pvHeros = (niveau: number) => 110 + 45 * (niveau - 1);
+export const degatsHeros = (j: Jeu, h: Heros) => (11 + 5 * (h.niveau - 1)) * (1 + 0.06 * Math.max(0, j.vague - 1));
+/** Combien de monstres elle frappe d'un coup : un, puis deux au niveau 3, trois au niveau 5. */
+export const ciblesHeros = (h: Heros) => (h.niveau >= 5 ? 3 : h.niveau >= 3 ? 2 : 1);
+
+/** Où elle se tient au départ, et où elle revient : juste au-dessus du Cœur. */
+function departHeros(j: Jeu): V {
+  const c = j.carte.coeur;
+  return { x: c.x, y: Math.max(20, c.y - 34) };
+}
+
+function creerHeros(j: Jeu): Heros {
+  const d = departHeros(j);
+  return { x: d.x, y: d.y, cible: null, pv: pvHeros(1), pvMax: pvHeros(1), niveau: 1, xp: 0, mort: 0, cd: 0, frappe: null, depuisFrappe: 9, calme: 9, regard: 1 };
+}
+
+/** On l'envoie quelque part (un doigt glissé depuis elle). */
+export function ordonnerHeros(j: Jeu, x: number, y: number): void {
+  const h = j.heros;
+  if (!h || h.mort > 0) return;
+  h.cible = { x: Math.max(12, Math.min(LARGEUR - 12, x)), y: Math.max(12, Math.min(HAUTEUR - 12, y)) };
+}
+
+function gagnerXp(j: Jeu, h: Heros, xp: number): void {
+  if (h.niveau >= NIVEAU_MAX) return;
+  h.xp += xp;
+  while (h.niveau < NIVEAU_MAX && h.xp >= XP_NIVEAUX[h.niveau]) {
+    h.niveau++;
+    const avant = h.pvMax;
+    h.pvMax = pvHeros(h.niveau);
+    h.pv += h.pvMax - avant;
+    effet(j, "texte", h.x, h.y - 34, 1.4, { texte: `niveau ${h.niveau} !` });
+    j.evts.push({ k: "niveau", n: h.niveau, x: h.x, y: h.y });
+    j.sons.push("ding");
+  }
+}
+
+function avancerHeros(j: Jeu, h: Heros, dt: number): void {
+  h.depuisFrappe += dt;
+  if (h.mort > 0) {
+    h.mort -= dt;
+    if (h.mort <= 0) {
+      h.mort = 0;
+      const d = departHeros(j);
+      h.x = d.x;
+      h.y = d.y;
+      h.pv = h.pvMax;
+      h.cible = null;
+    }
+    return;
+  }
+  if (h.pv <= 0) {
+    h.mort = RETOUR_HEROS;
+    h.pv = 0;
+    effet(j, "texte", h.x, h.y - 30, 1.4, { texte: "Bille tombe !" });
+    j.evts.push({ k: "tombe", x: h.x, y: h.y });
+    j.sons.push("aie");
+    return;
+  }
+  h.calme += dt;
+  if (h.calme > 3) h.pv = Math.min(h.pvMax, h.pv + h.pvMax * 0.04 * dt);
+  // Elle marche, droit devant : un stylo passe partout
+  if (h.cible) {
+    const dx = h.cible.x - h.x;
+    const dy = h.cible.y - h.y;
+    const d = hypot(dx, dy);
+    if (d < 2) h.cible = null;
+    else {
+      const pas = Math.min(d, VITESSE_HEROS * dt);
+      h.x += (dx / d) * pas;
+      h.y += (dy / d) * pas;
+      if (Math.abs(dx) > 1) h.regard = dx > 0 ? 1 : -1;
+    }
+  }
+  // Elle tape les plus proches, même ce qui vole (elle saute)
+  h.cd -= dt;
+  if (h.cd > 0) return;
+  const proches = j.ennemis
+    .filter((e) => !e.mort && hypot(e.x - h.x, e.y - h.y) < PORTEE_HEROS + e.r)
+    .sort((a, b) => hypot(a.x - h.x, a.y - h.y) - hypot(b.x - h.x, b.y - h.y) || a.id - b.id)
+    .slice(0, ciblesHeros(h));
+  if (!proches.length) return;
+  h.cd = CADENCE_HEROS;
+  h.frappe = { x: proches[0].x, y: proches[0].y };
+  h.depuisFrappe = 0;
+  h.regard = proches[0].x >= h.x ? 1 : -1;
+  for (const e of proches) {
+    e.revele = Math.max(e.revele, 1);
+    blesser(j, e, degatsHeros(j, h));
+  }
+  j.sons.push("tir");
 }

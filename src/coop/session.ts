@@ -88,8 +88,8 @@ function commencer(d: Debut): void {
   coop.g = d.g;
   const page = d.page === "jour" ? null : PAGES.find((p) => p.id === d.page)!;
   const options = page
-    ? () => ({ ...optionsDePage(page, { toursDispo: d.tours, colle: d.colle }), pouvoirs: d.pouvoirs, coop: true })
-    : () => ({ ...optionsPageDuJour(d.jour!, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS], coop: true });
+    ? () => ({ ...optionsDePage(page, { toursDispo: d.tours, colle: d.colle }), pouvoirs: d.pouvoirs, coop: true, heros: true })
+    : () => ({ ...optionsPageDuJour(d.jour!, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS], coop: true, heros: true });
   const hote = l.role === "hote";
   const c: CoopPartie = {
     ls: new Lockstep((m) => l.envoyer({ ...m, g: d.g }), hote),

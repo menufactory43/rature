@@ -1,7 +1,7 @@
 // Ce que la coop joue sur la partie : les actions des deux joueurs, appliquées pareil des deux côtés, et l'empreinte
 // qui vérifie que les deux parties sont toujours la même. Sans DOM : les tests le font tourner sous Node.
 import type { Pt } from "../sim/gestures";
-import { PAS_SIM, ameliorer, appliquerTrace, changerCible, choisirFourniture, lancerPouvoir, lancerVague, step, vendre, type Jeu, type Resultat } from "../sim/jeu";
+import { PAS_SIM, ameliorer, appliquerTrace, changerCible, choisirFourniture, lancerPouvoir, lancerVague, ordonnerHeros, step, vendre, type Jeu, type Resultat } from "../sim/jeu";
 import type { Pouvoir } from "../sim/pouvoirs";
 import { DUREE_TOUR, type Action } from "./lockstep";
 
@@ -55,6 +55,9 @@ export function executer(j: Jeu, c: Commun, a: Action): Fait {
     case "vague":
       lancerVague(j);
       return { a };
+    case "heros":
+      if (typeof a.x === "number" && typeof a.y === "number" && Number.isFinite(a.x) && Number.isFinite(a.y)) ordonnerHeros(j, a.x, a.y);
+      return { a };
     case "fourniture":
       if (typeof a.i === "number") choisirFourniture(j, a.i);
       return { a };
@@ -106,5 +109,10 @@ export function empreinte(j: Jeu): number {
     mel(t.cd);
   }
   mel(j.murs.length);
+  if (j.heros) {
+    mel(j.heros.x);
+    mel(j.heros.y);
+    mel(j.heros.pv);
+  }
   return h;
 }

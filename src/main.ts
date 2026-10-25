@@ -11,7 +11,7 @@ import { bureau, coinCorne, dessous, ombrePli, reliure } from "./render/bureau";
 import { ameliorer, blesser, choisirFourniture, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "./sim/pages";
 import { TYPES_TOURS } from "./sim/tours";
-import { colleDebloquee, effacer, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
+import { colleDebloquee, effacer, pageGagnee, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
 import { synchroniser } from "./progression";
@@ -83,17 +83,19 @@ function jouerPage(p: Page, mode: "campagne" | "defi" | "sansFin"): void {
       defi: mode === "defi" ? p.defi : undefined, sansFin: mode === "sansFin",
     }),
     pouvoirs: pouvoirsDebloques(),
+    // Bille descend sur la page dès la première page gagnée
+    heros: pageGagnee("1-1"),
   }), { page: p, mode, libelle });
 }
 
 function pageDuJour(): void {
   const g = grainePageDuJour();
-  demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS] }), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
+  demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS], heros: true }), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
 }
 
 /** Une nouvelle graine à chaque interro (et à chaque « nouvelle interro »). */
 function interro(): void {
-  demarrerPartie(() => optionsInterro((Math.random() * 2 ** 31) >>> 0), { mode: "interro", libelle: "Interro surprise" });
+  demarrerPartie(() => ({ ...optionsInterro((Math.random() * 2 ** 31) >>> 0), heros: true }), { mode: "interro", libelle: "Interro surprise" });
 }
 
 actions.jouerPage = jouerPage;

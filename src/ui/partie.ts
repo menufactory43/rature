@@ -17,7 +17,7 @@ import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  PAS_SIM, choisirFourniture, fournitureDue, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  PAS_SIM, choisirFourniture, fournitureDue, ordonnerHeros, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, optionsDePage, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
@@ -97,6 +97,8 @@ interface Partie {
   enAttente: Pt[][];
   /** Le tutoriel, quand c'en est un. */
   tuto: Tuto | null;
+  /** Bille prise au doigt : où on l'emmène. */
+  herosPris: { x: number; y: number } | null;
 }
 
 export let partie: Partie | null = null;
@@ -110,7 +112,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
     selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [], tuto: null,
+    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [], tuto: null, herosPris: null,
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -299,6 +301,14 @@ export function toucherPartie(x: number, y: number, e: PointerEvent): boolean {
   const j = p.jeu;
   if (j.phase !== "attente" && j.phase !== "jeu") return false;
   if (x < 0 || x > W || y < HAUT || y > HAUT + PAGE_H || p.doigt !== null) return false;
+  // Sur Bille : on la prend pour l'emmener ailleurs (un simple toucher lui demande une astuce)
+  const h = j.heros;
+  if (h && !h.mort && Math.hypot(x - h.x, y - HAUT - (h.y - 6)) < 26) {
+    p.doigt = e.pointerId;
+    p.herosPris = { x, y: y - HAUT };
+    p.selection = null;
+    return true;
+  }
   p.doigt = e.pointerId;
   p.trace = [{ x, y: y - HAUT, t: e.timeStamp }];
   if (p.coop) p.coop.envoye = 0;
@@ -315,6 +325,11 @@ function marquerAppris(t: TypeTour): void {
 
 export function glisserPartie(e: PointerEvent, versPage: (ev: PointerEvent) => { x: number; y: number }): void {
   const p = partie;
+  if (p && e.pointerId === p.doigt && p.herosPris) {
+    const q = versPage(e);
+    p.herosPris = { x: q.x, y: q.y - HAUT };
+    return;
+  }
   if (!p || e.pointerId !== p.doigt || !p.trace) return;
   const evts = e.getCoalescedEvents?.() ?? [];
   for (const ev of evts.length ? evts : [e]) {
@@ -351,6 +366,14 @@ export function leverPartie(e: PointerEvent): void {
   const p = partie;
   if (!p || e.pointerId !== p.doigt) return;
   p.doigt = null;
+  if (p.herosPris) {
+    const q = p.herosPris;
+    const h = p.jeu.heros;
+    p.herosPris = null;
+    if (h && Math.hypot(q.x - h.x, q.y - h.y) > 18) faire(p, { k: "heros", x: q.x, y: q.y }, () => ordonnerHeros(p.jeu, q.x, q.y));
+    else toucherBille(lancerTuto);
+    return;
+  }
   audio.gratter(0);
   const trace = p.trace;
   p.trace = null;
@@ -464,6 +487,20 @@ export function dessinerPartie(v: Vue): void {
     brouillon = { pts: p.trace, geste: c.geste, couleur: c.geste === "tour" ? STYLOS[tourDe(c.glyphe!)] : undefined };
   }
   scene(ctx, j, brouillon, p.selection);
+  // Bille qu'on emmène : la ligne jusqu'au doigt, et où elle ira
+  if (p.herosPris && j.heros) {
+    const q = p.herosPris;
+    ctx.save();
+    ctx.setLineDash([4, 5]);
+    ctx.strokeStyle = BLEU;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(j.heros.x, j.heros.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+    ctx.restore();
+    cercle(ctx, q.x, q.y, 10 + Math.sin(ui.temps * 8) * 1.5, { couleur: BLEU, epaisseur: 1.8, graine: 502 });
+  }
   if (p.coop) traitsCoop(p);
   if (p.trace && p.trace.length > 3 && !p.arme) apercu(p);
   if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
@@ -529,11 +566,17 @@ export function dessinerPartie(v: Vue): void {
       sec: p.sec,
       nouveaux: p.nouveaux.length,
       dessine: !!p.trace,
+      heros: !!j.heros,
       tuto: lancerTuto,
     });
     if (p.fiches.length) dire("Une nouvelle tour ! Regarde bien son symbole : tu le dessineras en petit sur la page.", { cle: "fiche", recharge: 20, urgent: true, humeur: "joie" });
     if (j.choix) dire("Une fourniture au choix ! Prends ce qui manque à ta défense.", { cle: "fourniture", recharge: 90, urgent: true });
-    placer({ x: 24, y: HAUT + PAGE_H - 6, h: 58, cle: "partie", repere: "carte", muette: !!p.trace || !!p.arme, alpha: p.trace ? 0.5 : 1, touche: () => toucherBille(lancerTuto) });
+    const h = j.heros;
+    if (h) {
+      // Bille est sur la page : ses bulles partent d'elle (ou du Cœur, quand elle attend de revenir)
+      const ou = h.mort > 0 ? { x: j.carte.coeur.x + 26, y: j.carte.coeur.y + 10 } : { x: h.x, y: h.y + 14 };
+      placer({ x: ou.x, y: ou.y + HAUT, h: 40, cle: "heros", repere: "carte", sansCorps: true, immobile: true, muette: !!p.trace || !!p.arme || !!p.herosPris });
+    } else placer({ x: 24, y: HAUT + PAGE_H - 6, h: 58, cle: "partie", repere: "carte", muette: !!p.trace || !!p.arme, alpha: p.trace ? 0.5 : 1, touche: () => toucherBille(lancerTuto) });
   }
   if (p.coop) attenteBinome(p, p.coop);
   if (j.choix) choixFournitures(p, j.choix);
