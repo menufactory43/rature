@@ -1,4 +1,6 @@
 // L'écran de jeu : la page, les bandeaux, le pense-bête des symboles, le menu des tours, la pause et la fin.
+import { astuceDe, billeActive, conseil, dessinerCompagnon, observerPartie, placeEnPartie, refusBille, toucherBille } from "./compagnon";
+import { bille } from "../render/bille";
 import * as audio from "../audio";
 import * as fx from "../render/fx";
 import { vibrer } from "../vibre";
@@ -194,6 +196,7 @@ export function avancerPartie(dt: number): void {
         const pose = r?.ok && r.geste === "tour" ? j.tours[j.tours.length - 1] : null;
         if (r && (r.geste === "tour" || r.geste === "rien" || !r.ok)) fx.ajouterTrace(f.trace, pose ? { x: pose.x, y: pose.y } : null, r.ok ? (moi ? BLEU : STYLO_BINOME) : CRAYON);
         if (moi && r && !r.ok && r.geste !== "rien") vibrer("refus");
+        if (moi && r && !r.ok && r.raison) refusBille(r.geste, r.raison);
         if (!moi) c.crayon = null;
       });
       p.vitesse = c.commun.vitesse;
@@ -394,6 +397,7 @@ export function leverPartie(e: PointerEvent): void {
   }
   const r = appliquerTrace(j, trace);
   if (p.tuto) tutoApres(p.tuto, r);
+  else if (!r.ok && r.raison) refusBille(r.geste, r.raison);
   if (r.ok) p.selection = null;
   if (!r.ok && r.geste !== "rien") vibrer("refus");
   if (r.geste === "tour" || r.geste === "rien" || !r.ok) {
@@ -461,11 +465,15 @@ export function dessinerPartie(v: Vue): void {
   ctx.restore();
   // Le cahier ouvert montre la vague à venir sur la page de droite : la carte reste dégagée
   if (j.phase === "attente" && v.mise !== "ouvert") carteAttente(p, v.mise === "bande");
-  const conseil = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : astuce(p);
-  if (conseil && !p.trace) {
+  // Les conseils des premières pages : c'est Bille qui les donne (le bandeau, si on l'a fait taire)
+  const aide = astuce(p);
+  const parBille = billeActive() && !p.tuto;
+  conseil(parBille ? aide : null);
+  const bandeau = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : parBille ? null : aide;
+  if (bandeau && !p.trace) {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
     feuille(ctx, 20, y - 22, W - 40, 44, "rgba(246,239,220,0.88)", 41, 0);
-    paragraphe(ctx, conseil, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
+    paragraphe(ctx, bandeau, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
   }
   let encre = { x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 };
   if (portrait) {
@@ -504,6 +512,17 @@ export function dessinerPartie(v: Vue): void {
   fx.dessinerEcran(ctx, HAUT, W, portrait ? H : HAUT + PAGE_H);
   ctx.restore();
   postitNouveau(p);
+  if (!p.tuto && !p.fin) {
+    observerPartie(j, {
+      mode: p.mode,
+      nouvellePage: p.mode === "campagne" && p.page && !(sauvegarde.etoiles[p.page.id] > 0) ? `Page ${p.page.id}, « ${p.page.nom} »` : undefined,
+      sec: p.sec,
+      nouveaux: p.nouveaux.length,
+      dessine: !!p.trace,
+      tuto: lancerTuto,
+    });
+    dessinerCompagnon(ctx, { ...placeEnPartie(HAUT, PAGE_H), muette: !!p.trace || !!p.arme, alpha: p.trace ? 0.5 : 1, touche: () => toucherBille(lancerTuto) });
+  }
   if (p.coop) attenteBinome(p, p.coop);
   if (j.choix) choixFournitures(p, j.choix);
   else p.choixDepuis = 0;
@@ -1271,6 +1290,8 @@ function fiche(type: TypeTour, j: Jeu): void {
 
 function dessinerPause(): void {
   voile(0.88);
+  // Bille profite de la pause pour glisser une astuce
+  if (partie && !partie.tuto) dessinerCompagnon(ui.ctx, { x: 40, y: H - 30, h: 84, texte: astuceDe(partie.jeu.stats.tues + partie.jeu.vague * 7) });
   ecrire(ui.ctx, "Pause", W / 2, 230, { police: "titre", taille: 64 });
   bouton(90, 300, 220, 56, "Reprendre", () => partie && mettrePause(partie, false), { principal: true });
   const c = partie?.coop;
@@ -1436,6 +1457,7 @@ function dessinerFin(p: Partie): void {
     const lm = ctx.measureText(mot).width;
     trait(ctx, [{ x: W / 2 + 10 - lm / 2, y: 494 }, { x: W / 2 + 10 + lm / 2, y: 489 }], { couleur: ROUGE, epaisseur: 1.6, graine: 199, alpha: Math.min(1, (t - 1.6) * 3) });
   }
+  if (billeActive() && t > 1.6) bille(ctx, 46, 470, 70, ui.temps, { joie: gagne || sansFin, triste: !gagne && !sansFin });
   if (ui.temps - p.finDepuis < 0.8) return;
   const suivante = p.page && p.mode === "campagne" && gagne ? PAGES[PAGES.indexOf(p.page) + 1] : undefined;
   let y = 512;

@@ -30,7 +30,7 @@ function volume(nom: string, k: "musique" | "effets", y: number): void {
 }
 
 /** Une case à cocher, cochée au stylo rouge comme une correction. */
-function caseACocher(texte: string, sous: string, k: keyof Pick<Reglages, "vibrations" | "gaucher" | "effetsReduits">, y: number): void {
+function caseACocher(texte: string, sous: string, k: keyof Pick<Reglages, "vibrations" | "gaucher" | "effetsReduits" | "bille">, y: number): void {
   const ctx = ui.ctx;
   boite(ctx, 44, y - 14, 28, 28, { epaisseur: 1.6, graine: y });
   if (reglages[k]) trait(ctx, [{ x: 48, y: y - 1 }, { x: 56, y: y + 9 }, { x: 74, y: y - 18 }], { couleur: ROUGE, epaisseur: 3, graine: y + 1 });
@@ -49,5 +49,6 @@ export function dessinerReglages(): void {
   caseACocher("Vibrations", "sur l'app iPhone et Android", "vibrations", 350);
   caseACocher("Gaucher", "les pouvoirs passent à gauche du bandeau", "gaucher", 420);
   caseACocher("Effets réduits", "moins de secousses, d'éclairs et d'éclats", "effetsReduits", 490);
+  caseACocher("Bille", "la mascotte commente et donne des conseils", "bille", 560);
   bouton(120, H - 90, 160, 50, "Retour", () => nav.aller(retour), { principal: true });
 }

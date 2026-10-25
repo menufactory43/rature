@@ -19,6 +19,7 @@ import { H, W, boutonSous, dessinerAppui, ui } from "./ui/base";
 import { RELIURE, calculer, ecranDans, pageDroiteMenu, type Rect, type Vue } from "./ui/vue";
 import { actions, pageDeGarde, dessinerAide, dessinerCampagne, dessinerTalents, dessinerTitre } from "./ui/menus";
 import { nav } from "./ui/nav";
+import { compagnonMenu } from "./ui/compagnon";
 import { dessinerReglages } from "./ui/reglages";
 import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
@@ -255,6 +256,8 @@ function image(maintenant: number): void {
     else if (nav.ecran === "trousse") dessinerTrousse();
     else if (nav.ecran === "reglages") dessinerReglages();
     else if (nav.ecran === "coop") dessinerCoop();
+    // Bille, dans son coin (le titre la dessine lui-même)
+    compagnonMenu(ctx, nav.ecran, lancerTuto);
     if (vue.mise === "ouvert") {
       ctx.setTransform(pageDroiteMenu(vue));
       if (fond) ctx.drawImage(fond, 0, 0, W, H);

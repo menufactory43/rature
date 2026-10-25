@@ -164,7 +164,8 @@ export function ecrire(ctx: CanvasRenderingContext2D, texte: string, x: number, 
 }
 
 /** Écrit un texte qui tient dans une largeur, retour à la ligne compris. Renvoie la hauteur occupée. */
-export function paragraphe(ctx: CanvasRenderingContext2D, texte: string, x: number, y: number, largeur: number, o: Ecrit = {}): number {
+/** Les lignes d'un texte coupé à la largeur donnée (sans le dessiner). */
+export function couper(ctx: CanvasRenderingContext2D, texte: string, largeur: number, o: Ecrit = {}): string[] {
   const taille = o.taille ?? 16;
   ctx.save();
   ctx.font = o.police === "titre" ? `700 ${taille}px Caveat, cursive` : `${taille}px "Patrick Hand", cursive`;
@@ -180,6 +181,12 @@ export function paragraphe(ctx: CanvasRenderingContext2D, texte: string, x: numb
   }
   if (l) lignes.push(l);
   ctx.restore();
+  return lignes;
+}
+
+export function paragraphe(ctx: CanvasRenderingContext2D, texte: string, x: number, y: number, largeur: number, o: Ecrit = {}): number {
+  const taille = o.taille ?? 16;
+  const lignes = couper(ctx, texte, largeur, o);
   const h = taille * 1.2;
   lignes.forEach((li, i) => ecrire(ctx, li, x, y + i * h, { ...o, base: "top" }));
   return lignes.length * h;

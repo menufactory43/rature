@@ -10,12 +10,14 @@ export interface Reglages {
   gaucher: boolean;
   /** Moins de secousses, d'éclairs et de particules. */
   effetsReduits: boolean;
+  /** Bille, la mascotte, commente et conseille sur tous les écrans. */
+  bille: boolean;
 }
 
 const CLE = "rature.reglages";
 
 function charger(): Reglages {
-  const defaut: Reglages = { musique: 0.6, effets: 0.9, vibrations: true, gaucher: false, effetsReduits: false };
+  const defaut: Reglages = { musique: 0.6, effets: 0.9, vibrations: true, gaucher: false, effetsReduits: false, bille: true };
   try {
     return { ...defaut, ...(JSON.parse(localStorage.getItem(CLE) ?? "") as Partial<Reglages>) };
   } catch {

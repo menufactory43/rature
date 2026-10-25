@@ -14,6 +14,10 @@ export interface PoseBille {
   joie?: boolean;
   /** Elle parle : la bouche bouge. */
   parle?: boolean;
+  /** Déçue : sourcils tombants, bouche à l'envers. */
+  triste?: boolean;
+  /** Étonnée : sourcils levés, bouche ronde. */
+  surprise?: boolean;
 }
 
 /** Bille, la pointe posée en (x, y), haute de h. */
@@ -132,9 +136,28 @@ export function bille(ctx: CanvasRenderingContext2D, x: number, y: number, h: nu
   const ouvre = o.parle ? Math.abs(Math.sin(t * 13)) : 0;
   ctx.strokeStyle = CONTOUR;
   ctx.lineWidth = Math.max(1, h * 0.022);
+  // Les sourcils, quand elle a une humeur
+  if (o.triste || o.surprise) {
+    for (const s of [-1, 1]) {
+      const ex = x + s * l * 0.24;
+      const sy = yo - ry * (o.surprise ? 1.75 : 1.35);
+      ctx.beginPath();
+      ctx.moveTo(ex - ry * 0.8, sy + (o.triste ? -s * ry * 0.35 : 0));
+      ctx.lineTo(ex + ry * 0.8, sy + (o.triste ? s * ry * 0.35 : 0));
+      ctx.stroke();
+    }
+  }
   ctx.beginPath();
   const by = yo + ry * 1.75;
-  if (o.joie || ouvre > 0.3) {
+  if (o.surprise && !o.parle) {
+    ctx.fillStyle = "#7a2630";
+    ctx.ellipse(x, by + ry * 0.1, ry * 0.32, ry * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (o.triste && !(o.parle && ouvre > 0.3)) {
+    ctx.arc(x, by + ry * 0.5, l * 0.13, Math.PI + 0.5, Math.PI * 2 - 0.5);
+    ctx.stroke();
+  } else if (o.joie || ouvre > 0.3) {
     ctx.fillStyle = "#7a2630";
     ctx.ellipse(x, by, l * 0.14, ry * (o.joie ? 0.75 : 0.25 + ouvre * 0.45), 0, 0, Math.PI);
     ctx.fill();
