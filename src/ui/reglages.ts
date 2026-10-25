@@ -4,6 +4,7 @@ import { changer, reglages, type Reglages } from "../reglages";
 import { vibrer } from "../vibre";
 import { H, W, bouton, titre, ui, zone } from "./base";
 import { nav, type Ecran } from "./nav";
+import { dire } from "./compagnon";
 
 let retour: Ecran = "titre";
 
@@ -39,6 +40,7 @@ function caseACocher(texte: string, sous: string, k: keyof Pick<Reglages, "vibra
   zone(36, y - 22, W - 72, 48, () => {
     changer(k, !reglages[k]);
     if (k === "vibrations" && reglages.vibrations) vibrer("moyen");
+    if (k === "bille" && reglages.bille) dire("Me revoilà ! Tu m'avais manqué.", { urgent: true, humeur: "joie" });
   });
 }
 

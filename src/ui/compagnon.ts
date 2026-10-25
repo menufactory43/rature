@@ -5,7 +5,7 @@ import { bille } from "../render/bille";
 import { ENNEMIS } from "../sim/ennemis";
 import type { Geste } from "../sim/gestures";
 import type { Jeu } from "../sim/jeu";
-import { reglages } from "../reglages";
+import { changer, reglages } from "../reglages";
 import { H, W, bouton, ui, zone } from "./base";
 import type { Ecran } from "./nav";
 
@@ -45,6 +45,8 @@ const etat = {
   astuce: 0,
   /** Le dernier signe de vie du joueur : sans rien, elle s'ennuie, puis s'endort. */
   calme: 0,
+  /** Depuis quand elle s'en va (0 : elle reste). */
+  depart: 0,
 };
 
 const CLE_DITS = "rature.bille";
@@ -126,8 +128,16 @@ const ON_DIRAIT = "On dirait que tu essaies de ";
 /** Toucher Bille : une astuce, et de quoi revoir le tutoriel. */
 export function toucherBille(tuto?: () => void): void {
   if (!reglages.bille) return;
-  dire(astuceSuivante(), { urgent: true, choix: tuto ? [{ texte: "Revoir le tutoriel", action: tuto }, { texte: "Merci !", action: taire }] : undefined });
+  const cache = { texte: "Cache-toi", action: cacher };
+  dire(astuceSuivante(), { urgent: true, duree: 9, choix: tuto ? [{ texte: "Revoir le tutoriel", action: tuto }, cache] : [cache] });
 }
+
+/** Le joueur n'en veut plus : elle dit au revoir, s'efface, et ne revient que si on la recoche dans les réglages. */
+export function cacher(): void {
+  dire("D'accord, je file ! Tu pourras me rappeler dans les Réglages.", { urgent: true, humeur: "triste", duree: DEPART });
+  etat.depart = ui.temps;
+}
+const DEPART = 2.8;
 
 // --- Le dessin ---
 
@@ -144,8 +154,6 @@ export interface Place {
   muette?: boolean;
   /** Une réplique imposée, qui passe avant tout le reste. */
   texte?: string;
-  /** Dessinée même quand les réglages l'ont fait taire (le titre, sans bulle). */
-  toujours?: boolean;
   humeur?: Humeur;
   montre?: { x: number; y: number };
   alpha?: number;
@@ -162,13 +170,21 @@ export function activite(): void {
 
 export function dessinerCompagnon(ctx: CanvasRenderingContext2D, pl: Place, glissable = false): void {
   const active = reglages.bille;
-  if (!active && !pl.toujours) return;
+  if (!active) return;
   const t = ui.temps;
+  // Elle s'en va : sa bulle d'au revoir, puis elle s'efface ; ensuite les réglages la disent coupée
+  const part = etat.depart ? (t - etat.depart) / DEPART : 0;
+  if (part >= 1) {
+    etat.depart = 0;
+    taire();
+    changer("bille", false);
+    return;
+  }
   const r = parle() ? etat.replique : null;
   const texte = active && !pl.muette ? pl.texte ?? r?.texte ?? etat.fixe : null;
   const humeur = pl.humeur ?? r?.humeur;
   ctx.save();
-  ctx.globalAlpha = pl.alpha ?? 1;
+  ctx.globalAlpha = (pl.alpha ?? 1) * (part > 0.7 ? (1 - part) / 0.3 : 1);
   const depuis = r && !pl.texte ? t - r.depuis : 9;
   // Sans rien à dire : elle salue de temps en temps, regarde partout quand on la laisse, puis s'endort
   const e = ennui();
@@ -287,11 +303,11 @@ export function compagnonTitre(ctx: CanvasRenderingContext2D, tutoVu: boolean, t
     });
   const premiere = !tutoVu && t > 1.2 ? "Première fois ? Touche-moi : je t'explique tout, tout doucement." : undefined;
   dessinerCompagnon(ctx, {
-    x: 44, y: 252, h: 92, bulle: { x: 74, y: 24, w: W - 148 }, toujours: true, texte: parle() ? undefined : premiere,
-    touche: () => (tutoVu && reglages.bille ? dire("Besoin d'aide ?", { urgent: true, duree: 10, choix: [{ texte: "Le tutoriel", action: tuto }, { texte: "Une astuce", action: () => dire(astuceSuivante(), { urgent: true }) }] }) : tuto()),
+    x: 44, y: 252, h: 92, bulle: { x: 74, y: 24, w: W - 148 }, texte: parle() ? undefined : premiere,
+    touche: () => (tutoVu && reglages.bille ? dire("Besoin d'aide ?", { urgent: true, duree: 10, choix: [{ texte: "Le tutoriel", action: tuto }, { texte: "Une astuce", action: () => dire(astuceSuivante(), { urgent: true }) }, { texte: "Cache-toi", action: cacher }] }) : tuto()),
   });
   // Toucher la bulle de la première fois lance aussi le tutoriel
-  if (premiere && !parle()) zone(74, 24, W - 148, 60, tuto);
+  if (premiere && reglages.bille && !parle()) zone(74, 24, W - 148, 60, tuto);
 }
 
 // --- La partie ---
@@ -344,7 +360,9 @@ export function observerPartie(j: Jeu, info: InfoPartie): void {
       : info.nouvellePage ? `${info.nouvellePage}. Une nouvelle page ! Prends le temps de regarder le chemin.`
       : info.mode === "sansFin" ? "Sans fin : on tient le plus longtemps possible. Courage !"
       : tirer(["On remet ça ?", "Allez, cette fois c'est la bonne.", "Je sens que ça va bien se passer."]);
-    dire(accueil, { urgent: true, duree: 4.5, humeur: "joie" });
+    // La toute première fois, elle se présente : et dit comment la faire taire
+    if (!dire("Coucou, c'est Bille ! Touche-moi pour une astuce… ou pour me cacher si je t'embête.", { cle: "presentation", unique: true, urgent: true, duree: 6, humeur: "joie" }))
+      dire(accueil, { urgent: true, duree: 4.5, humeur: "joie" });
   }
   const st = j.stats;
   // Une vie perdue, ou presque plus
