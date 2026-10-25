@@ -705,6 +705,7 @@ function tuer(j: Jeu, e: Ennemi): void {
   j.sons.push("pop");
   if (e.type === "tache") for (const s of [-1, 1]) ajouterEnnemi(j, "petite", e.x + s * 9, e.y + s * 4);
   if (e.type === "mere") for (let k = 0; k < 6; k++) ajouterEnnemi(j, "tache", e.x + cos(k) * 30, e.y + sin(k) * 30);
+  if (e.type === "point") for (let k = 0; k < 3; k++) ajouterEnnemi(j, "punaise", e.x + cos(k * 2.1) * 30, e.y + sin(k * 2.1) * 30);
   if (f.boss) effet(j, "boom", e.x, e.y, 0.7, { r: 80 });
 }
 
@@ -875,11 +876,11 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     e.revele = Math.max(0, e.revele - dt);
     e.acide = Math.max(0, e.acide - dt);
     e.bloque = false;
-    if (f.boss && (e.type === "mere" || e.type === "compas")) {
+    if (f.boss && (e.type === "mere" || e.type === "compas" || e.type === "point")) {
       e.ponte -= dt;
       if (e.ponte <= 0) {
-        e.ponte = e.type === "mere" ? 2.6 : 3.2;
-        ajouterEnnemi(j, e.type === "mere" ? "petite" : "araignee", e.x + cos(e.age) * e.r, e.y + sin(e.age) * e.r);
+        e.ponte = e.type === "mere" ? 2.6 : e.type === "point" ? 3.4 : 3.2;
+        ajouterEnnemi(j, e.type === "mere" ? "petite" : e.type === "point" ? "avion" : "araignee", e.x + cos(e.age) * e.r, e.y + sin(e.age) * e.r);
       }
     }
     if (f.soigne) {

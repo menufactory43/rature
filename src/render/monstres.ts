@@ -208,6 +208,35 @@ export function monstre(ctx: CanvasRenderingContext2D, type: TypeEnnemi, x: numb
       trait(ctx, [{ x: x - 12, y: cy }, { x: x - 13, y: cy - 12 }, { x: x - 6, y: cy - 5 }, { x, y: cy - 15 }, { x: x + 6, y: cy - 5 }, { x: x + 13, y: cy - 12 }, { x: x + 12, y: cy }], { couleur, epaisseur: 2, graine: g, ferme: true, fond: "rgba(230,180,60,0.6)" });
       break;
     }
+    case "point": {
+      // Le Point Final : un gros point d'encre, plein et luisant, qui écrase tout ; trois petits points le suivent
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      for (let k = 1; k <= 3; k++) {
+        ctx.fillStyle = couleur;
+        ctx.beginPath();
+        ctx.arc(x - c * r * (1.1 + k * 0.55), y - s * r * (1.1 + k * 0.55) + Math.sin(age * 6 + k) * 2, r * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const p = 1 + Math.sin(age * 3) * 0.04;
+      ctx.fillStyle = couleur;
+      ctx.beginPath();
+      for (let k = 0; k <= 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const rr = r * 0.95 * p * (1 + (hash3(g, k % 24, 9) - 0.5) * 0.08);
+        if (k) ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+        else ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.35, y - r * 0.4, r * 0.22, r * 0.12, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+      yeux(ctx, x, y - r * 0.1, r * 0.3, r * 0.24, regard, g, true);
+      const cy = y - r * 0.92;
+      trait(ctx, [{ x: x - 12, y: cy }, { x: x - 13, y: cy - 12 }, { x: x - 6, y: cy - 5 }, { x, y: cy - 15 }, { x: x + 6, y: cy - 5 }, { x: x + 13, y: cy - 12 }, { x: x + 12, y: cy }], { couleur, epaisseur: 2, graine: g, ferme: true, fond: "rgba(230,180,60,0.6)" });
+      break;
+    }
     case "gomme": {
       // Une lettre à moitié gommée, qui laisse une traînée effacée derrière elle
       const c = Math.cos(angle);

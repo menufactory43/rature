@@ -15,7 +15,7 @@ export const LIGNES = HAUTEUR / CASE;
 /** Une case du texte de carte vaut 2 × 2 cases fines. */
 const GROS = 20;
 
-export type Papier = "seyes" | "carreaux" | "portee";
+export type Papier = "seyes" | "carreaux" | "portee" | "dictee";
 
 /** Les objets posés sur la page, qui bloquent comme une tache : G gomme, T trombone, R règle, K capuchon, B bonbon, S taille-crayon. */
 export type TypeObjet = "gomme" | "trombone" | "regle" | "capuchon" | "bonbon" | "taille";

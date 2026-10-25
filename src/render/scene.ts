@@ -131,6 +131,15 @@ function griffonnages(ctx: CanvasRenderingContext2D, carte: Carte): void {
         ctx.stroke();
         trait(ctx, [{ x: 0, y: 0 }, { x: 16, y: 0 }], { ...crayon, graine: g });
       } else trait(ctx, [{ x: -16, y: 8 }, { x: -6, y: -4 }, { x: 2, y: 2 }, { x: 16, y: -12 }], { ...crayon, graine: g });
+    } else if (carte.papier === "dictee") {
+      // Des bouts de dictée corrigée : un mot, un accent, une faute soulignée
+      const mots = ["Dictée", "le corbeau", "à l'école", "les élèves", "c'était", "lundi", "ils ont été", "à côté"];
+      if (genre <= 1) ecrire(ctx, mots[Math.floor(hash3(g, 5, 5) * mots.length)], 0, 0, { taille: 16, couleur: "rgba(60,62,75,0.28)" });
+      else if (genre === 2) ecrire(ctx, ["é", "è", "ê", "ç"][Math.floor(hash3(g, 5, 5) * 4)], 0, 0, { taille: 26, couleur: "rgba(60,62,75,0.25)" });
+      else {
+        ecrire(ctx, ["fote", "aprè", "sa"][Math.floor(hash3(g, 5, 5) * 3)], 0, 0, { taille: 15, couleur: "rgba(196,48,43,0.28)" });
+        trait(ctx, [{ x: -14, y: 8 }, { x: 14, y: 7 }], { ...crayon, couleur: "rgba(196,48,43,0.3)", graine: g });
+      }
     } else if (carte.papier === "portee") {
       if (genre <= 1) {
         // Une croche, ou deux doubles croches

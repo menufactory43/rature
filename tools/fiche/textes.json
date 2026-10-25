@@ -1,0 +1,23 @@
+{
+  "fr-FR": {
+    "nom": "Rature : défense au stylo",
+    "sousTitre": "Un tower defense au stylo",
+    "motsCles": "tower defense,stylo,dessin,cahier,école,stratégie,doodle,défense,monstres,lettres,dictée",
+    "promo": "Dessine tes tours au stylo bille, trace des murs et rature les lettres qui envahissent ton cahier !",
+    "description": "Les marges de ton cahier sont envahies : des lettres, des fautes, des avions de dictée et des points d'exclamation marchent droit sur ton Cœur. Ton arme ? Ton stylo bille.\n\nRATURE est un tower defense où tout se dessine :\n• un PETIT cercle, un triangle, un éclair… et une tour apparaît ;\n• un grand trait lent trace un MUR que la horde doit contourner ;\n• un trait sec RATURE ce qu'il touche ;\n• une grande boucle pose de la COLLE.\n\nCE QUI T'ATTEND\n• 4 cahiers, 20 pages faites main : brouillon, maths, musique et dictée, chacun avec son papier.\n• 7 tours à débloquer, chacune avec deux spécialisations.\n• 15 monstres-lettres et 4 boss : le Mot-Serpent, l'Esperluette, l'Œ blindé et le Point Final.\n• Des défis par page, un mode sans fin, la page du jour (la même pour tout le monde) et l'interro surprise.\n• Des talents à placer avec tes étoiles, et la Trousse pour redessiner tes tours à ta main.\n• À deux : chacun sur son téléphone, une seule encre pour deux stylos.\n• Bille, la mascotte, t'explique tout dans un tutoriel tout doux… et te glisse des conseils (tu peux la faire taire).\n• Game Center : classements et succès. Sauvegarde iCloud.\n\nSans publicité, sans achat intégré, sans compte, et jouable hors ligne.",
+    "nouveautes": "Première version : bon courage pour défendre tes cahiers !"
+  },
+  "en-US": {
+    "nom": "Rature: Ballpoint Defense",
+    "sousTitre": "Hand-drawn tower defense",
+    "motsCles": "tower defense,pen,drawing,doodle,notebook,school,strategy,defense,monsters,letters,sketch",
+    "promo": "Draw your towers with a ballpoint pen, trace walls and cross out the letters invading your notebook!",
+    "description": "The margins of your notebook are under attack: letters, typos, dictation paper planes and exclamation marks are marching on your Heart. Your weapon? Your ballpoint pen.\n\nRATURE is a tower defense where you draw everything:\n• a SMALL circle, a triangle, a lightning bolt… and a tower appears;\n• a long slow stroke draws a WALL the horde must walk around;\n• a quick stroke CROSSES OUT whatever it hits;\n• a big loop lays down GLUE.\n\nWHAT AWAITS YOU\n• 4 notebooks, 20 handmade pages: scratch, maths, music and dictation, each with its own paper.\n• 7 towers to unlock, each with two specialisations.\n• 15 letter monsters and 4 bosses: the Snake Word, the Ampersand, the Armoured Œ and the Full Stop.\n• Challenges for every page, an endless mode, the daily page (the same for everyone) and the pop quiz.\n• Talents to buy with your stars, and the Pencil Case to redraw your towers by hand.\n• Two players: each on their own phone, one ink pot for two pens.\n• Bille, the mascot, explains everything in a gentle tutorial… and slips you tips (you can tell her to hush).\n• Game Center leaderboards and achievements. iCloud save.\n\nNo ads, no in-app purchases, no account, and fully playable offline.",
+    "nouveautes": "First release: good luck defending your notebooks!"
+  },
+  "urls": {
+    "support": "https://github.com/menufactory43/rature/issues",
+    "marketing": "https://menufactory43.github.io/rature/",
+    "confidentialite": "https://menufactory43.github.io/rature/confidentialite.html"
+  }
+}

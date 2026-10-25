@@ -1,4 +1,4 @@
-// Les papiers des cahiers : Seyès (brouillon), petits carreaux (maths), portées (musique). Dessinés une fois.
+// Les papiers des cahiers : Seyès (brouillon), petits carreaux (maths), portées (musique), grandes lignes (dictée).
 import type { Papier } from "../sim/carte";
 import { hash3 } from "../sim/rng";
 import { PAPIER } from "./encre";
@@ -79,6 +79,11 @@ export function papier(largeur: number, hauteur: number, echelle: number, type: 
   } else if (type === "carreaux") {
     for (let y = depuis(y0, haut, 10); y < y1; y += 10) ligne(x0, y, x1, y, "rgba(80,120,190,0.2)", 0.5);
     for (let x = depuis(x0, 0, 10); x < x1; x += 10) ligne(x, y0, x, y1, "rgba(80,120,190,0.2)", 0.5);
+  } else if (type === "dictee") {
+    // Le cahier de dictée : de grandes lignes simples, la marge rouge, et la date en haut
+    for (let y = depuis(y0, haut + 12, 24); y < y1; y += 24) ligne(x0, y, x1, y, "rgba(80,120,190,0.26)", 0.7);
+    ligne(40, y0, 40, y1, "rgba(200,60,60,0.45)", 1.2);
+    ligne(43, y0, 43, y1, "rgba(200,60,60,0.3)", 0.8);
   } else {
     // Des portées : cinq lignes, puis un blanc
     for (let yp = depuis(y0 - 30, haut + 30, 64); yp < y1; yp += 64) for (let k = 0; k < 5; k++) ligne(Math.min(18, x0 + 18), yp + k * 6, Math.max(largeur - 18, x1 - 18), yp + k * 6, "rgba(60,60,70,0.22)", 0.7);

@@ -152,9 +152,9 @@ export function dessinerAide(): void {
       paragraphe(ctx, `${f.role} Spécialisations : ${f.specs[0].nom} ou ${f.specs[1].nom}.`, 126, y + 4, 260, { align: "left", taille: 13, couleur: CRAYON });
     });
   } else {
-    const liste: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "gomme", "postit", "fantome", "tippex", "punaise", "mere", "compas", "taille"];
+    const liste: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "gomme", "postit", "fantome", "tippex", "punaise", "mere", "compas", "taille", "point"];
     liste.forEach((t, i) => {
-      const y = 134 + i * 51;
+      const y = 128 + i * 46;
       const f = ENNEMIS[t];
       monstre(ctx, t, 40, y + 4, Math.min(13, f.rayon), i + 1, ui.temps, ROUGE, -0.6);
       ecrire(ctx, f.nom, 68, y - 7, { align: "left", taille: 16, couleur: ROUGE });
@@ -167,7 +167,7 @@ export function dessinerAide(): void {
 
 // --- Les cahiers ---
 
-const CAHIERS = ["Cahier de brouillon", "Cahier de maths", "Cahier de musique"];
+const CAHIERS = ["Cahier de brouillon", "Cahier de maths", "Cahier de musique", "Cahier de dictée"];
 let cahier = 0;
 let pageChoisie: Page | null = null;
 
@@ -214,8 +214,8 @@ export function dessinerCampagne(): void {
     const pages = PAGES.filter((p) => p.cahier === i + 1);
     const ouvert = pages.length > 0 && pageOuverte(pages[0]);
     const etoiles = pages.reduce((s, p) => s + (sauvegarde.etoiles[p.id] ?? 0), 0);
-    bouton(14 + i * 126, 82, 120, 52, nom.replace("Cahier de ", ""), () => ouvert && ((cahier = i), (pageChoisie = null)), {
-      taille: 17, principal: cahier === i, inactif: !ouvert, sous: pages.length ? `${etoiles}/${pages.length * 3} ★` : "bientôt",
+    bouton(10 + i * 96, 82, 90, 52, nom.replace("Cahier de ", ""), () => ouvert && ((cahier = i), (pageChoisie = null)), {
+      taille: 16, principal: cahier === i, inactif: !ouvert, sous: pages.length ? `${etoiles}/${pages.length * 3} ★` : "bientôt",
     });
   });
   ecrire(ctx, CAHIERS[cahier], W / 2, 162, { police: "titre", taille: 28 });

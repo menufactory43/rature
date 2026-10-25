@@ -9,8 +9,8 @@ export interface Cadre {
   h: number;
 }
 
-/** La couverture du cahier, selon le cahier (brouillon rouge, maths bleu, musique vert). */
-export const COUVERTURES: Record<number, string> = { 0: "#b8433a", 1: "#b8433a", 2: "#2f5f9e", 3: "#3d7a4a" };
+/** La couverture du cahier, selon le cahier (brouillon rouge, maths bleu, musique vert, dictée violet). */
+export const COUVERTURES: Record<number, string> = { 0: "#b8433a", 1: "#b8433a", 2: "#2f5f9e", 3: "#3d7a4a", 4: "#6b4a8e" };
 
 function bois(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   const fond = ctx.createLinearGradient(0, 0, w, h);

@@ -3,7 +3,7 @@
 export type TypeEnnemi =
   | "gribouille" | "carre" | "avion" | "araignee" | "tache" | "petite" | "gomme"
   | "postit" | "fantome" | "tippex" | "punaise"
-  | "mere" | "compas" | "taille";
+  | "mere" | "compas" | "taille" | "point";
 
 export interface FicheEnnemi {
   nom: string;
@@ -67,6 +67,8 @@ export const ENNEMIS: Record<TypeEnnemi, FicheEnnemi> = {
     conseil: "Zigzague et pond des zèdes." },
   taille: { nom: "l'Œ blindé", pluriel: "l'Œ blindé", pv: 3600, vitesse: 16, rayon: 30, vies: 12, ronge: 120, prime: 250, cout: 0, groupe: [1, 1], armure: 8, devore: 60, boss: true,
     conseil: "Lourdement blindé. Dévore les tours qu'il frôle." },
+  point: { nom: "le Point Final", pluriel: "le Point Final", pv: 4200, vitesse: 15, rayon: 30, vies: 15, ronge: 110, prime: 300, cout: 0, groupe: [1, 1], armure: 5, bouclier: 500, boss: true,
+    conseil: "Lâche des avions de dictée en avançant, et éclate en points d'exclamation. Garde de quoi raturer près du Cœur." },
 };
 
 /** Multiplicateur de PV selon la vague. */
