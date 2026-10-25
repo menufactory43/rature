@@ -12,12 +12,16 @@ export interface Reglages {
   effetsReduits: boolean;
   /** Bille, la mascotte, commente et conseille sur tous les écrans. */
   bille: boolean;
+  /** La langue des textes. */
+  langue: "fr" | "en";
 }
 
 const CLE = "rature.reglages";
 
 function charger(): Reglages {
-  const defaut: Reglages = { musique: 0.6, effets: 0.9, vibrations: true, gaucher: false, effetsReduits: false, bille: true };
+  // La langue du téléphone, la première fois : le français s'il parle français, l'anglais sinon
+  const fr = typeof navigator === "undefined" || (navigator.language ?? "fr").toLowerCase().startsWith("fr");
+  const defaut: Reglages = { musique: 0.6, effets: 0.9, vibrations: true, gaucher: false, effetsReduits: false, bille: true, langue: fr ? "fr" : "en" };
   try {
     return { ...defaut, ...(JSON.parse(localStorage.getItem(CLE) ?? "") as Partial<Reglages>) };
   } catch {

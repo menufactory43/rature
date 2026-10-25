@@ -5,6 +5,7 @@ import { vibrer } from "../vibre";
 import { H, W, bouton, titre, ui, zone } from "./base";
 import { nav, type Ecran } from "./nav";
 import { dire } from "./compagnon";
+import { t } from "../i18n";
 
 let retour: Ecran = "titre";
 
@@ -52,5 +53,9 @@ export function dessinerReglages(): void {
   caseACocher("Gaucher", "les pouvoirs passent à gauche du bandeau", "gaucher", 420);
   caseACocher("Effets réduits", "moins de secousses, d'éclairs et d'éclats", "effetsReduits", 490);
   caseACocher("Bille", "la mascotte commente et donne des conseils", "bille", 560);
+  // La langue : deux boutons, celui choisi en rouge
+  ecrire(ui.ctx, t("Langue"), 44, 632, { align: "left", taille: 20 });
+  bouton(150, 612, 100, 40, "Français", () => changer("langue", "fr"), { taille: 17, principal: reglages.langue === "fr" });
+  bouton(262, 612, 100, 40, "English", () => changer("langue", "en"), { taille: 17, principal: reglages.langue === "en" });
   bouton(120, H - 90, 160, 50, "Retour", () => nav.aller(retour), { principal: true });
 }
