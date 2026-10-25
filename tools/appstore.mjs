@@ -58,7 +58,7 @@ async function televerser(type, attributsCreation, relation, fichier) {
     const r = await fetch(op.url, { method: op.method, headers: h, body: octets.subarray(op.offset, op.offset + op.length) });
     if (!r.ok) throw new Error(`envoi de ${nom} : ${r.status}`);
   }
-  await api("PATCH", `/v1/${type}/${cree.data.id}`, { data: { type, id: cree.data.id, attributes: { uploaded: true, sourceFileChecksum: createHash("md5").update(octets).digest("hex") } } });
+  await api("PATCH", `/v1/${type}/${cree.data.id}`, { data: { type, id: cree.data.id, attributes: { uploaded: true, ...(type === "appScreenshots" ? { sourceFileChecksum: createHash("md5").update(octets).digest("hex") } : {}) } } });
   return cree.data.id;
 }
 
@@ -187,6 +187,8 @@ if (faire("gamecenter")) {
       const image = join(ICI, "fiche/gamecenter", `${s.id}.png`);
       if (loc && existsSync(image)) {
         const deja = await essayer("image ?", () => api("GET", `/v1/gameCenterAchievementLocalizations/${loc.id}/gameCenterAchievementImage`));
+        // Une image envoyée mais pas encore déclarée (un essai précédent interrompu) : on la déclare
+        if (deja?.data && deja.data.attributes?.assetDeliveryState?.state !== "COMPLETE") await essayer(`image ${s.id} ${l}`, () => api("PATCH", `/v1/gameCenterAchievementImages/${deja.data.id}`, { data: { type: "gameCenterAchievementImages", id: deja.data.id, attributes: { uploaded: true } } }));
         if (!deja?.data) await essayer(`image ${s.id} ${l}`, () => televerser("gameCenterAchievementImages", {}, { gameCenterAchievementLocalization: { data: { type: "gameCenterAchievementLocalizations", id: loc.id } } }, image));
       }
     }

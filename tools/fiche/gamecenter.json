@@ -1,0 +1,280 @@
+{
+  "succes": [
+    {
+      "id": "rature.tuto",
+      "points": 5,
+      "symbole": "✎",
+      "fr": {
+        "nom": "Bon élève",
+        "texte": "Finir le tutoriel avec Bille."
+      },
+      "en": {
+        "nom": "Good Pupil",
+        "texte": "Finish the tutorial with Bille."
+      }
+    },
+    {
+      "id": "rature.page1",
+      "points": 5,
+      "symbole": "1-1",
+      "fr": {
+        "nom": "Première page",
+        "texte": "Gagner la page 1-1."
+      },
+      "en": {
+        "nom": "First Page",
+        "texte": "Win page 1-1."
+      }
+    },
+    {
+      "id": "rature.cahier1",
+      "points": 20,
+      "symbole": "I",
+      "fr": {
+        "nom": "Brouillon propre",
+        "texte": "Gagner toutes les pages du cahier de brouillon."
+      },
+      "en": {
+        "nom": "Neat Scratch",
+        "texte": "Win every page of the scratch notebook."
+      }
+    },
+    {
+      "id": "rature.cahier2",
+      "points": 30,
+      "symbole": "II",
+      "fr": {
+        "nom": "Fort en maths",
+        "texte": "Gagner toutes les pages du cahier de maths."
+      },
+      "en": {
+        "nom": "Maths Whizz",
+        "texte": "Win every page of the maths notebook."
+      }
+    },
+    {
+      "id": "rature.cahier3",
+      "points": 40,
+      "symbole": "III",
+      "fr": {
+        "nom": "Oreille absolue",
+        "texte": "Gagner toutes les pages du cahier de musique."
+      },
+      "en": {
+        "nom": "Perfect Pitch",
+        "texte": "Win every page of the music notebook."
+      }
+    },
+    {
+      "id": "rature.cahier4",
+      "points": 50,
+      "symbole": "IV",
+      "fr": {
+        "nom": "Dictée sans faute",
+        "texte": "Gagner toutes les pages du cahier de dictée."
+      },
+      "en": {
+        "nom": "Flawless Dictation",
+        "texte": "Win every page of the dictation notebook."
+      }
+    },
+    {
+      "id": "rature.etoiles",
+      "points": 100,
+      "symbole": "★",
+      "fr": {
+        "nom": "Premier de la classe",
+        "texte": "Trois étoiles sur toutes les pages de la campagne."
+      },
+      "en": {
+        "nom": "Top of the Class",
+        "texte": "Three stars on every campaign page."
+      }
+    },
+    {
+      "id": "rature.sansfaute",
+      "points": 15,
+      "symbole": "♥",
+      "fr": {
+        "nom": "Sans faute",
+        "texte": "Gagner une page sans perdre une seule vie."
+      },
+      "en": {
+        "nom": "Not a Scratch",
+        "texte": "Win a page without losing a single life."
+      }
+    },
+    {
+      "id": "rature.combo5",
+      "points": 15,
+      "symbole": "×5",
+      "fr": {
+        "nom": "Grande rature",
+        "texte": "Raturer cinq monstres d'un seul trait."
+      },
+      "en": {
+        "nom": "Big Cross-Out",
+        "texte": "Cross out five monsters in a single stroke."
+      }
+    },
+    {
+      "id": "rature.serpent",
+      "points": 20,
+      "symbole": "S",
+      "fr": {
+        "nom": "Charmeur de serpent",
+        "texte": "Vaincre le Mot-Serpent."
+      },
+      "en": {
+        "nom": "Snake Charmer",
+        "texte": "Defeat the Snake Word."
+      }
+    },
+    {
+      "id": "rature.esperluette",
+      "points": 25,
+      "symbole": "&",
+      "fr": {
+        "nom": "Et puis quoi encore",
+        "texte": "Vaincre l'Esperluette."
+      },
+      "en": {
+        "nom": "And That's That",
+        "texte": "Defeat the Ampersand."
+      }
+    },
+    {
+      "id": "rature.oe",
+      "points": 30,
+      "symbole": "Œ",
+      "fr": {
+        "nom": "Ouvre-boîte",
+        "texte": "Vaincre l'Œ blindé."
+      },
+      "en": {
+        "nom": "Can Opener",
+        "texte": "Defeat the Armoured Œ."
+      }
+    },
+    {
+      "id": "rature.dictateur",
+      "points": 40,
+      "symbole": ".",
+      "fr": {
+        "nom": "Le dernier mot",
+        "texte": "Vaincre le Point Final."
+      },
+      "en": {
+        "nom": "The Last Word",
+        "texte": "Defeat the Full Stop."
+      }
+    },
+    {
+      "id": "rature.interro",
+      "points": 40,
+      "symbole": "20/20",
+      "fr": {
+        "nom": "20/20",
+        "texte": "Réussir une interro surprise jusqu'au bout."
+      },
+      "en": {
+        "nom": "Full Marks",
+        "texte": "Survive a pop quiz to the very end."
+      }
+    },
+    {
+      "id": "rature.defi",
+      "points": 15,
+      "symbole": "!",
+      "fr": {
+        "nom": "Défi relevé",
+        "texte": "Réussir le défi d'une page."
+      },
+      "en": {
+        "nom": "Challenge Met",
+        "texte": "Complete a page's challenge."
+      }
+    },
+    {
+      "id": "rature.coop",
+      "points": 20,
+      "symbole": "2",
+      "fr": {
+        "nom": "À quatre mains",
+        "texte": "Gagner une page à deux."
+      },
+      "en": {
+        "nom": "Four Hands",
+        "texte": "Win a page with a friend."
+      }
+    },
+    {
+      "id": "rature.trousse",
+      "points": 5,
+      "symbole": "△",
+      "fr": {
+        "nom": "Artiste",
+        "texte": "Redessiner une tour dans la Trousse."
+      },
+      "en": {
+        "nom": "Artist",
+        "texte": "Redraw a tower in the Pencil case."
+      }
+    },
+    {
+      "id": "rature.jour7",
+      "points": 25,
+      "symbole": "7",
+      "fr": {
+        "nom": "Assidu",
+        "texte": "Jouer la page du jour sept jours différents."
+      },
+      "en": {
+        "nom": "Regular",
+        "texte": "Play the daily page on seven different days."
+      }
+    }
+  ],
+  "tableaux": [
+    {
+      "id": "rature.classement.jour",
+      "quotidien": true,
+      "fr": {
+        "nom": "Page du jour",
+        "suffixe": " points",
+        "suffixe1": " point"
+      },
+      "en": {
+        "nom": "Daily Page",
+        "suffixe": " points",
+        "suffixe1": " point"
+      }
+    },
+    {
+      "id": "rature.classement.interro",
+      "fr": {
+        "nom": "Interro surprise",
+        "suffixe": " vagues",
+        "suffixe1": " vague"
+      },
+      "en": {
+        "nom": "Pop Quiz",
+        "suffixe": " waves",
+        "suffixe1": " wave"
+      }
+    },
+    {
+      "id": "rature.classement.etoiles",
+      "fr": {
+        "nom": "Étoiles",
+        "suffixe": " étoiles",
+        "suffixe1": " étoile"
+      },
+      "en": {
+        "nom": "Stars",
+        "suffixe": " stars",
+        "suffixe1": " star"
+      }
+    }
+  ]
+}
