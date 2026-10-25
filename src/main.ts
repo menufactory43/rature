@@ -27,6 +27,7 @@ import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
 import { basculerPause, avancerPartie, crochets, demarrerPartie, dessinerPartie, glisserPartie, lancerTuto, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
 import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, toucherTrousse } from "./ui/trousse";
+import { t } from "./i18n";
 
 const canvas = document.getElementById("jeu") as HTMLCanvasElement;
 ui.ctx = canvas.getContext("2d")!;
@@ -76,7 +77,8 @@ function versPage(e: PointerEvent): { x: number; y: number } {
 // --- Les parties ---
 
 function jouerPage(p: Page, mode: "campagne" | "defi" | "sansFin"): void {
-  const libelle = `${p.id} ${p.nom}${mode === "defi" ? " (défi)" : mode === "sansFin" ? " (sans fin)" : ""}`;
+  const base = `${p.id} ${t(p.nom)}`;
+  const libelle = mode === "defi" ? t("{base} (défi)", { base }) : mode === "sansFin" ? t("{base} (sans fin)", { base }) : base;
   demarrerPartie(() => ({
     ...optionsDePage(p, {
       toursDispo: toursDebloquees(), colle: colleDebloquee(), talents: talentsActifs(),
@@ -90,12 +92,12 @@ function jouerPage(p: Page, mode: "campagne" | "defi" | "sansFin"): void {
 
 function pageDuJour(): void {
   const g = grainePageDuJour();
-  demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS], heros: true }), { mode: "jour", libelle: "Page du " + g.split("-").reverse().slice(0, 2).join("/"), cleJour: g });
+  demarrerPartie(() => ({ ...optionsPageDuJour(g, [...TYPES_TOURS]), pouvoirs: [...TYPES_POUVOIRS], heros: true }), { mode: "jour", libelle: t("Page du {d}", { d: g.split("-").reverse().slice(0, 2).join("/") }), cleJour: g });
 }
 
 /** Une nouvelle graine à chaque interro (et à chaque « nouvelle interro »). */
 function interro(): void {
-  demarrerPartie(() => ({ ...optionsInterro((Math.random() * 2 ** 31) >>> 0), heros: true }), { mode: "interro", libelle: "Interro surprise" });
+  demarrerPartie(() => ({ ...optionsInterro((Math.random() * 2 ** 31) >>> 0), heros: true }), { mode: "interro", libelle: t("Interro surprise") });
 }
 
 actions.jouerPage = jouerPage;

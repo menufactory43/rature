@@ -9,6 +9,7 @@ import { TYPES_TOURS, type TypeTour } from "../sim/tours";
 import { continuerSeul, demarrerPartie, partie, type CoopPartie } from "../ui/partie";
 import { nav } from "../ui/nav";
 import { Lien, type Role } from "./lien";
+import { t } from "../i18n";
 import { Lockstep, type MessageTour } from "./lockstep";
 
 interface Debut {
@@ -101,7 +102,7 @@ function commencer(d: Debut): void {
     rejouer: hote ? lancer : null,
     crayon: null, envoye: 0, dernierEnvoi: 0, absentDepuis: 0, parti: false, vitesseDemandee: null,
   };
-  const libelle = page ? `${page.id} ${page.nom} · à deux` : `Page du ${d.jour!.split("-").reverse().slice(0, 2).join("/")} · à deux`;
+  const libelle = t("{base} · à deux", { base: page ? `${page.id} ${t(page.nom)}` : t("Page du {d}", { d: d.jour!.split("-").reverse().slice(0, 2).join("/") }) });
   demarrerPartie(options, { page: page ?? undefined, mode: "coop", libelle, coop: c });
 }
 
@@ -128,14 +129,14 @@ function recevoir(m: Record<string, unknown>): void {
     case "bonjour":
       // L'invité arrive sans partie (premier passage, ou il a rechargé sa page) : l'hôte en partie relance pour les deux
       if (l.role === "hote" && coop.debut && partie?.coop) {
-        coop.note = "ton binôme est revenu : on reprend la page au début";
+        coop.note = t("ton binôme est revenu : on reprend la page au début");
         lancer();
       }
       return;
     case "quitte":
       if (c) c.parti = true;
       else if (partie && nav.ecran === "partie") continuerSeul(partie);
-      coop.note = "ton binôme est parti";
+      coop.note = t("ton binôme est parti");
       if (l.role === "invite") {
         fermer();
         coop.debut = null;

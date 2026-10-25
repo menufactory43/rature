@@ -5,6 +5,7 @@
 import type { TypeEnnemi } from "../sim/ennemis";
 import { hash3 } from "../sim/rng";
 import { CRAYON, ROUGE, hachures, trait } from "./encre";
+import { t } from "../i18n";
 
 /** Le clignement : un instant toutes les trois secondes environ, décalé selon le monstre. */
 let clin = false;
@@ -128,7 +129,7 @@ function sillage(g: number, x: number, y: number, angle: number, age: number) {
 }
 
 /** La faute que porte un monstre (et dont les lettres repartent seules quand on la rature). */
-export const fauteDe = (graine: number) => FAUTES[Math.abs(Math.round(graine)) % FAUTES.length];
+export const fauteDe = (graine: number) => t(FAUTES[Math.abs(Math.round(graine)) % FAUTES.length]);
 
 export function monstre(ctx: CanvasRenderingContext2D, type: TypeEnnemi, x: number, y: number, r: number, graine: number, age: number, couleur = ROUGE, angle = 0): void {
   clin = age > 0 && (age + graine * 0.37) % 3.1 < 0.13;
@@ -196,11 +197,12 @@ export function monstre(ctx: CanvasRenderingContext2D, type: TypeEnnemi, x: numb
     case "mere": {
       // Le mot-serpent : un mot à rallonge qui suit le chemin parcouru derrière sa tête couronnée
       const queue = sillage(g, x, y, angle, age);
+      const mot = t(SERPENT);
       const n = 11;
       for (let i = n; i >= 1; i--) {
         const q = queue(i * r * 0.5);
         const ond = Math.sin(age * 5 - i * 0.8) * r * 0.12;
-        lettre(ctx, SERPENT[i], q.x - q.s * ond, q.y + q.c * ond, r * (1.25 - i * 0.045), couleur, g + i);
+        lettre(ctx, mot[i], q.x - q.s * ond, q.y + q.c * ond, r * (1.25 - i * 0.045), couleur, g + i);
       }
       lettre(ctx, "A", x, y, r * 2.3, couleur, g, 4);
       yeux(ctx, x, y - r * 0.25, r * 0.28, r * 0.2, regard, g, true);
@@ -280,7 +282,7 @@ export function monstre(ctx: CanvasRenderingContext2D, type: TypeEnnemi, x: numb
       const c = Math.cos(angle);
       const s = Math.sin(angle);
       pattes(ctx, x, y + r * 0.7, 2, r * 0.35, r * 0.5, age, couleur, g);
-      lettre(ctx, "mot", x - c * r * 0.2, y - s * r * 0.2, r * 2.2, couleur, g);
+      lettre(ctx, t("mot"), x - c * r * 0.2, y - s * r * 0.2, r * 2.2, couleur, g);
       yeux(ctx, x - c * r * 0.2, y - s * r * 0.2 - r * 0.55, r * 0.3, r * 0.22, regard, g);
       // La parenthèse, toujours devant lui, tournée vers où il va
       ctx.save();

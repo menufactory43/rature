@@ -17,7 +17,7 @@ export function ouvrirReglages(depuis: Ecran): void {
 /** Un volume : dix cases à hachurer, et un toucher pour choisir. */
 function volume(nom: string, k: "musique" | "effets", y: number): void {
   const ctx = ui.ctx;
-  ecrire(ctx, nom, 44, y, { align: "left", taille: 22 });
+  ecrire(ctx, t(nom), 44, y, { align: "left", taille: 22 });
   const n = Math.round(reglages[k] * 10);
   const x0 = 44;
   const w = 26;
@@ -28,7 +28,7 @@ function volume(nom: string, k: "musique" | "effets", y: number): void {
     if (plein) for (let d = 4; d < w + 26; d += 6) trait(ctx, [{ x: x + Math.max(0, d - 26), y: y + 18 + Math.min(26, d) }, { x: x + Math.min(w, d), y: y + 18 + Math.max(0, d - w) }], { couleur: BLEU, epaisseur: 0.9, amp: 0.2, graine: i * 13 + d });
     zone(x - 2, y + 10, w + 4, 42, () => changer(k, (i + 1) / 10 === reglages[k] ? i / 10 : (i + 1) / 10));
   }
-  ecrire(ctx, n ? `${n * 10} %` : "coupé", x0 + 10 * (w + 4) + 6, y + 32, { align: "left", taille: 16, couleur: n ? BLEU : ROUGE });
+  ecrire(ctx, n ? `${n * 10} %` : t("coupé"), x0 + 10 * (w + 4) + 6, y + 32, { align: "left", taille: 16, couleur: n ? BLEU : ROUGE });
 }
 
 /** Une case à cocher, cochée au stylo rouge comme une correction. */
@@ -36,17 +36,17 @@ function caseACocher(texte: string, sous: string, k: keyof Pick<Reglages, "vibra
   const ctx = ui.ctx;
   boite(ctx, 44, y - 14, 28, 28, { epaisseur: 1.6, graine: y });
   if (reglages[k]) trait(ctx, [{ x: 48, y: y - 1 }, { x: 56, y: y + 9 }, { x: 74, y: y - 18 }], { couleur: ROUGE, epaisseur: 3, graine: y + 1 });
-  ecrire(ctx, texte, 86, y - 4, { align: "left", taille: 20 });
-  ecrire(ctx, sous, 86, y + 16, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, t(texte), 86, y - 4, { align: "left", taille: 20 });
+  ecrire(ctx, t(sous), 86, y + 16, { align: "left", taille: 13, couleur: CRAYON });
   zone(36, y - 22, W - 72, 48, () => {
     changer(k, !reglages[k]);
     if (k === "vibrations" && reglages.vibrations) vibrer("moyen");
-    if (k === "bille" && reglages.bille) dire("Me revoilà ! Tu m'avais manqué.", { urgent: true, humeur: "joie" });
+    if (k === "bille" && reglages.bille) dire(t("Me revoilà ! Tu m'avais manqué."), { urgent: true, humeur: "joie" });
   });
 }
 
 export function dessinerReglages(): void {
-  titre("Réglages", 70);
+  titre(t("Réglages"), 70);
   volume("Musique", "musique", 140);
   volume("Bruitages", "effets", 230);
   caseACocher("Vibrations", "sur l'app iPhone et Android", "vibrations", 350);
@@ -57,5 +57,5 @@ export function dessinerReglages(): void {
   ecrire(ui.ctx, t("Langue"), 44, 632, { align: "left", taille: 20 });
   bouton(150, 612, 100, 40, "Français", () => changer("langue", "fr"), { taille: 17, principal: reglages.langue === "fr" });
   bouton(262, 612, 100, 40, "English", () => changer("langue", "en"), { taille: 17, principal: reglages.langue === "en" });
-  bouton(120, H - 90, 160, 50, "Retour", () => nav.aller(retour), { principal: true });
+  bouton(120, H - 90, 160, 50, t("Retour"), () => nav.aller(retour), { principal: true });
 }

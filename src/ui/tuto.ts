@@ -9,23 +9,24 @@ import { polylineLength, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import { refusPose, type Jeu, type Resultat } from "../sim/jeu";
 import { HAUT, PAGE_H, W, bouton, zone } from "./base";
+import { t } from "../i18n";
 
 type Attente =
   | { k: "toucher" }
   /** Une condition sur la partie, vérifiée à chaque image. */
-  | { k: "fait"; quand: (j: Jeu, t: Tuto) => boolean };
+  | { k: "fait"; quand: (j: Jeu, tu: Tuto) => boolean };
 
 type Geste = "tour" | "mur" | "rature" | "cercle";
 
 interface Etape {
-  texte: string | ((t: Tuto) => string);
+  texte: string | ((tu: Tuto) => string);
   attente: Attente;
   /** Le seul geste permis pendant l'étape (aucun : tous). */
   geste?: Geste | "tous";
   /** Ce qu'on montre : un guide en pointillés, une flèche vers un endroit. */
-  guide?: (t: Tuto, j: Jeu) => Guide | null;
+  guide?: (tu: Tuto, j: Jeu) => Guide | null;
   /** À l'entrée dans l'étape. */
-  entree?: (t: Tuto, j: Jeu) => void;
+  entree?: (tu: Tuto, j: Jeu) => void;
   /** Bille est contente (après une réussite). */
   joie?: boolean;
 }
@@ -130,7 +131,7 @@ const ETAPES: Etape[] = [
     texte: "Ta première tour ! Dessine un PETIT cercle, là où je te montre, à côté du chemin. Pas trop vite, pas trop grand : un cercle de la taille d'une pièce.",
     attente: { k: "fait", quand: (j) => j.tours.length > 0 },
     geste: "tour",
-    guide: (t) => ({ trace: rond(t.spot, 15) }),
+    guide: (tu) => ({ trace: rond(tu.spot, 15) }),
   },
   {
     texte: "Bravo, c'est une Plume ! Elle tire toute seule sur les mots qui passent près d'elle.",
@@ -139,17 +140,17 @@ const ETAPES: Etape[] = [
   },
   {
     texte: "Voilà un mot qui arrive. Ne fais rien : regarde ta Plume s'en occuper.",
-    attente: { k: "fait", quand: (j, t) => vide(j) && t.temps - t.depuis > 1.5 },
+    attente: { k: "fait", quand: (j, tu) => vide(j) && tu.temps - tu.depuis > 1.5 },
     geste: "tous",
     entree: (_t, j) => envoyer(j, "gribouille", 1, 1),
   },
   {
-    texte: (t) => (t.fuites ? "Il est passé, ce n'est pas grave : c'était pour voir." : "Raturé ! Chaque mot raturé te rapporte un peu d'encre.") + " Plus tu as de tours, plus tu tiens.",
+    texte: (tu) => t(tu.fuites ? "Il est passé, ce n'est pas grave : c'était pour voir." : "Raturé ! Chaque mot raturé te rapporte un peu d'encre.") + " " + t("Plus tu as de tours, plus tu tiens."),
     attente: { k: "toucher" },
     joie: true,
   },
   {
-    texte: (t) => (t.menu ? "Son menu est ouvert. Touche le bouton « Améliorer » : ça coûte de l'encre, mais elle tirera plus fort." : "On peut rendre une tour plus forte. TOUCHE ta Plume du bout du doigt (un simple toucher, sans glisser)."),
+    texte: (tu) => t(tu.menu ? "Son menu est ouvert. Touche le bouton « Améliorer » : ça coûte de l'encre, mais elle tirera plus fort." : "On peut rendre une tour plus forte. TOUCHE ta Plume du bout du doigt (un simple toucher, sans glisser)."),
     attente: { k: "fait", quand: (j) => j.tours.some((x) => x.niveau > 1) },
     geste: "tous",
     entree: (_t, j) => (j.encre = Math.max(j.encre, 220)),
@@ -165,7 +166,7 @@ const ETAPES: Etape[] = [
     attente: { k: "fait", quand: (j) => j.murs.length > 0 },
     geste: "mur",
     entree: (_t, j) => (j.encre = Math.max(j.encre, 200)),
-    guide: (t) => ({ trace: [t.mur[0], t.mur[1]] }),
+    guide: (tu) => ({ trace: [tu.mur[0], tu.mur[1]] }),
   },
   {
     texte: "Les mots ne traversent pas les murs : ils font le tour. Leur chemin s'allonge, et tes tours ont plus de temps pour tirer. Les murs s'effacent tout seuls au bout d'un moment.",
@@ -174,7 +175,7 @@ const ETAPES: Etape[] = [
   },
   {
     texte: "Le geste le plus important : la RATURE. Un mot arrive, je vais arrêter le temps. Raye-le d'un trait SEC et RAPIDE, droit sur lui, comme pour barrer une faute.",
-    attente: { k: "fait", quand: (_j, t) => t.tues > 0 },
+    attente: { k: "fait", quand: (_j, tu) => tu.tues > 0 },
     geste: "rature",
     entree: (_t, j) => {
       j.encre = Math.max(j.encre, 200);
@@ -195,7 +196,7 @@ const ETAPES: Etape[] = [
     attente: { k: "fait", quand: (j) => j.colles.length > 0 },
     geste: "cercle",
     entree: (_t, j) => (j.encre = Math.max(j.encre, 260)),
-    guide: (t) => ({ trace: rond(t.boucle, t.boucle.r) }),
+    guide: (tu) => ({ trace: rond(tu.boucle, tu.boucle.r) }),
   },
   {
     texte: "Parfait. Retiens bien : petit cercle = une tour. Trait lent = un mur. Trait rapide = une rature. Grande boucle = de la colle.",
@@ -209,7 +210,7 @@ const ETAPES: Etape[] = [
   },
   {
     texte: "Dernier exercice : six mots arrivent, doucement. Tu as le droit à tout : tours, murs, ratures, colle. À toi de jouer !",
-    attente: { k: "fait", quand: (j, t) => vide(j) && t.temps - t.depuis > 2 },
+    attente: { k: "fait", quand: (j, tu) => vide(j) && tu.temps - tu.depuis > 2 },
     geste: "tous",
     entree: (_t, j) => {
       j.encre = Math.max(j.encre, 260);
@@ -225,35 +226,35 @@ function rond(c: { x: number; y: number }, r: number): V[] {
   });
 }
 
-const texte = (t: Tuto) => {
-  const e = ETAPES[t.etape];
-  return typeof e.texte === "function" ? e.texte(t) : e.texte;
+const texte = (tu: Tuto) => {
+  const e = ETAPES[tu.etape];
+  return typeof e.texte === "function" ? e.texte(tu) : t(e.texte);
 };
 
-function entrer(t: Tuto, j: Jeu, n: number): void {
-  t.etape = n;
-  t.depuis = t.temps;
-  t.note = null;
-  t.fuites = j.stats.fuites;
-  t.tues = 0;
+function entrer(tu: Tuto, j: Jeu, n: number): void {
+  tu.etape = n;
+  tu.depuis = tu.temps;
+  tu.note = null;
+  tu.fuites = j.stats.fuites;
+  tu.tues = 0;
   if (n >= ETAPES.length) {
-    t.fini = true;
+    tu.fini = true;
     return;
   }
-  ETAPES[n].entree?.(t, j);
+  ETAPES[n].entree?.(tu, j);
 }
 
 /** À chaque image : la vitesse du temps, et l'étape suivante quand celle-ci est faite. Renvoie la vitesse du jeu (0 : arrêté). */
-export function avancerTuto(t: Tuto, j: Jeu, dt: number): number {
-  t.temps += dt;
+export function avancerTuto(tu: Tuto, j: Jeu, dt: number): number {
+  tu.temps += dt;
   // Le tutoriel mène la danse : jamais de vague toute seule, jamais de défaite
   if (j.phase === "attente") j.phase = "jeu";
   j.prochaine = 1e9;
   j.vies = Math.max(j.vies, 5);
-  if (t.fini) return 1;
-  const e = ETAPES[t.etape];
-  if (e.attente.k === "fait" && e.attente.quand(j, t)) {
-    entrer(t, j, t.etape + 1);
+  if (tu.fini) return 1;
+  const e = ETAPES[tu.etape];
+  if (e.attente.k === "fait" && e.attente.quand(j, tu)) {
+    entrer(tu, j, tu.etape + 1);
     return 0;
   }
   const vivants = j.ennemis.length > 0 || j.file.length > 0;
@@ -263,63 +264,63 @@ export function avancerTuto(t: Tuto, j: Jeu, dt: number): number {
   if (e.geste === "rature") {
     const m = j.ennemis.find((x) => !x.mort);
     const entre = m && m.x > 20 && m.x < W - 20 && m.y > 20 && m.y < PAGE_H - 20;
-    return entre && t.temps - t.depuis > 1 ? 0 : 0.6;
+    return entre && tu.temps - tu.depuis > 1 ? 0 : 0.6;
   }
   return vivants ? 0.45 : 1;
 }
 
 /** Un toucher pendant que Bille parle : on passe à la suite. */
-export function toucherTuto(t: Tuto, j: Jeu): boolean {
-  if (t.fini) return false;
-  if (ETAPES[t.etape].attente.k !== "toucher") return false;
+export function toucherTuto(tu: Tuto, j: Jeu): boolean {
+  if (tu.fini) return false;
+  if (ETAPES[tu.etape].attente.k !== "toucher") return false;
   // Un petit délai : on ne saute pas une explication par un toucher en trop
-  if (t.temps - t.depuis < 0.6) return true;
-  entrer(t, j, t.etape + 1);
+  if (tu.temps - tu.depuis < 0.6) return true;
+  entrer(tu, j, tu.etape + 1);
   return true;
 }
 
-function noter(t: Tuto, mot: string): void {
-  t.note = mot;
-  t.noteDepuis = t.temps;
+function noter(tu: Tuto, mot: string): void {
+  tu.note = mot;
+  tu.noteDepuis = tu.temps;
 }
 
 /** Avant de jouer un trait : est-ce le geste attendu ? Sinon, Bille explique et rien n'est dépensé. */
-export function tutoRefuse(t: Tuto, trace: Pt[]): boolean {
-  if (t.fini) return false;
-  const e = ETAPES[t.etape];
+export function tutoRefuse(tu: Tuto, trace: Pt[]): boolean {
+  if (tu.fini) return false;
+  const e = ETAPES[tu.etape];
   if (e.attente.k === "toucher") return true;
   if (!e.geste || e.geste === "tous") return false;
   const c = classer(trace);
   if (c.geste === e.geste) return false;
   const l = polylineLength(trace);
   const pourquoi: Record<Geste, string> = {
-    tour: c.geste === "cercle" ? "Trop grand : une grande boucle, c'est de la colle. Fais un PETIT cercle, de la taille d'une pièce." : c.geste === "rature" ? "Trop vite : ça, c'est une rature. Dessine ton petit cercle tranquillement." : "Ce n'est pas un cercle. Ferme bien ton petit rond, de la taille d'une pièce.",
-    mur: c.geste === "rature" ? "Trop rapide : ça, c'est une rature. Pour un mur, va LENTEMENT." : l < 40 ? "Trop court : un mur, c'est un grand trait." : "Un simple trait, lent et presque droit, comme mes pointillés.",
-    rature: c.geste === "mur" ? "Trop lent : ça ferait un mur. Une rature, c'est un coup sec et RAPIDE." : "Un seul trait sec et rapide, droit sur le mot.",
-    cercle: c.geste === "tour" ? "Trop petit : ça ferait une tour. Fais une GRANDE boucle, qui se referme." : "Il faut une grande boucle FERMÉE : reviens bien à ton point de départ.",
+    tour: t(c.geste === "cercle" ? "Trop grand : une grande boucle, c'est de la colle. Fais un PETIT cercle, de la taille d'une pièce." : c.geste === "rature" ? "Trop vite : ça, c'est une rature. Dessine ton petit cercle tranquillement." : "Ce n'est pas un cercle. Ferme bien ton petit rond, de la taille d'une pièce."),
+    mur: t(c.geste === "rature" ? "Trop rapide : ça, c'est une rature. Pour un mur, va LENTEMENT." : l < 40 ? "Trop court : un mur, c'est un grand trait." : "Un simple trait, lent et presque droit, comme mes pointillés."),
+    rature: t(c.geste === "mur" ? "Trop lent : ça ferait un mur. Une rature, c'est un coup sec et RAPIDE." : "Un seul trait sec et rapide, droit sur le mot."),
+    cercle: t(c.geste === "tour" ? "Trop petit : ça ferait une tour. Fais une GRANDE boucle, qui se referme." : "Il faut une grande boucle FERMÉE : reviens bien à ton point de départ."),
   };
-  noter(t, c.geste === "rien" ? "Trop petit : appuie et dessine plus grand." : pourquoi[e.geste]);
+  noter(tu, c.geste === "rien" ? t("Trop petit : appuie et dessine plus grand.") : pourquoi[e.geste]);
   return true;
 }
 
 /** Après un trait joué : le résultat (refus du jeu, rature ratée…). */
-export function tutoApres(t: Tuto, r: Resultat): void {
-  if (t.fini) return;
-  const e = ETAPES[t.etape];
-  if (!r.ok && r.raison) noter(t, `Pas là : ${r.raison}. Essaie à l'endroit que je montre.`);
-  else if (e.geste === "rature" && r.geste === "rature" && !r.touches) noter(t, "Raté : il faut que ton trait passe SUR le mot. Réessaie, il ne bouge pas.");
-  else if (r.geste === "rature" && r.touches) t.tues += r.touches;
+export function tutoApres(tu: Tuto, r: Resultat): void {
+  if (tu.fini) return;
+  const e = ETAPES[tu.etape];
+  if (!r.ok && r.raison) noter(tu, t("Pas là : {raison}. Essaie à l'endroit que je montre.", { raison: r.raison }));
+  else if (e.geste === "rature" && r.geste === "rature" && !r.touches) noter(tu, t("Raté : il faut que ton trait passe SUR le mot. Réessaie, il ne bouge pas."));
+  else if (r.geste === "rature" && r.touches) tu.tues += r.touches;
 }
 
 /** Le dessin : le guide, Bille et sa bulle. Appelé dans les coordonnées du cadre (la carte commence à HAUT). */
-export function dessinerTuto(ctx: CanvasRenderingContext2D, t: Tuto, j: Jeu, portrait: boolean, actions: { passer: () => void; finir: (rejouer: boolean) => void; page: () => void }): void {
-  if (t.fini) {
-    finTuto(ctx, t, actions);
+export function dessinerTuto(ctx: CanvasRenderingContext2D, tu: Tuto, j: Jeu, portrait: boolean, actions: { passer: () => void; finir: (rejouer: boolean) => void; page: () => void }): void {
+  if (tu.fini) {
+    finTuto(ctx, tu, actions);
     return;
   }
-  const e = ETAPES[t.etape];
-  const g = e.guide?.(t, j) ?? null;
-  const tt = t.temps;
+  const e = ETAPES[tu.etape];
+  const g = e.guide?.(tu, j) ?? null;
+  const tt = tu.temps;
   // Le guide, sur la carte
   ctx.save();
   ctx.translate(0, HAUT);
@@ -343,7 +344,7 @@ export function dessinerTuto(ctx: CanvasRenderingContext2D, t: Tuto, j: Jeu, por
     // Le stylo fantôme qui montre le geste, à la bonne vitesse
     const duree = g.vite ? 0.35 : pts.length > 3 ? 1.8 : 2.2;
     const cycle = duree + 1.1;
-    const u = Math.min(1, ((tt - t.depuis) % cycle) / duree);
+    const u = Math.min(1, ((tt - tu.depuis) % cycle) / duree);
     const total = polylineLength(pts);
     let reste = u * total;
     const faits: V[] = [pts[0]];
@@ -369,22 +370,22 @@ export function dessinerTuto(ctx: CanvasRenderingContext2D, t: Tuto, j: Jeu, por
   // La bulle : en bas de la carte, ou en haut si ce qu'on montre est en bas
   // La bulle se met du côté opposé à ce qu'on montre (et au menu de la tour, s'il est ouvert)
   const gy = g?.trace ? g.trace.reduce((s2, q) => s2 + q.y, 0) / g.trace.length : g?.halo ? g.halo.y : g?.fleche ? g.fleche.y - HAUT : PAGE_H / 2;
-  const bas = t.menu ? t.menu === "haut" : gy < PAGE_H * 0.55;
-  const mots = t.note ?? texte(t);
+  const bas = tu.menu ? tu.menu === "haut" : gy < PAGE_H * 0.55;
+  const mots = tu.note ?? texte(tu);
   ctx.font = `17px "Patrick Hand", cursive`;
   const largeur = W - 120;
   const lignes = Math.ceil(ctx.measureText(mots).width / (largeur - 10)) + 1;
   const h = Math.max(96, lignes * 21 + 34);
   const y = bas ? HAUT + PAGE_H - h - 10 : HAUT + 54;
-  feuille(ctx, 84, y, W - 96, h, t.note ? "rgba(255,236,226,0.97)" : "rgba(253,250,240,0.97)", 70 + t.etape, 0.2);
-  paragraphe(ctx, mots, 94, y + 14, largeur, { align: "left", taille: 17, couleur: t.note ? ROUGE : "#2a2a35" });
-  const pied = e.attente.k === "toucher" ? (tt - t.depuis > 0.6 ? "touche l'écran pour continuer ›" : "") : t.note ? "réessaie !" : "à toi !";
+  feuille(ctx, 84, y, W - 96, h, tu.note ? "rgba(255,236,226,0.97)" : "rgba(253,250,240,0.97)", 70 + tu.etape, 0.2);
+  paragraphe(ctx, mots, 94, y + 14, largeur, { align: "left", taille: 17, couleur: tu.note ? ROUGE : "#2a2a35" });
+  const pied = e.attente.k === "toucher" ? (tt - tu.depuis > 0.6 ? t("touche l'écran pour continuer ›") : "") : tu.note ? t("réessaie !") : t("à toi !");
   ecrire(ctx, pied, W - 22, y + h - 14, { align: "right", taille: 13, couleur: CRAYON });
-  ecrire(ctx, `${t.etape + 1}/${ETAPES.length}`, 96, y + h - 14, { align: "left", taille: 12, couleur: CRAYON });
+  ecrire(ctx, `${tu.etape + 1}/${ETAPES.length}`, 96, y + h - 14, { align: "left", taille: 12, couleur: CRAYON });
   const montre = g?.halo ? { x: g.halo.x, y: g.halo.y + HAUT } : g?.trace ? { x: g.trace[0].x, y: g.trace[0].y + HAUT } : g?.fleche;
-  bille(ctx, 44, y + h + 4, 84, tt, { joie: e.joie && tt - t.depuis < 1.6, parle: tt - t.depuis < 2.5 || (!!t.note && tt - t.noteDepuis < 2), montre });
+  bille(ctx, 44, y + h + 4, 84, tt, { joie: e.joie && tt - tu.depuis < 1.6, parle: tt - tu.depuis < 2.5 || (!!tu.note && tt - tu.noteDepuis < 2), montre });
   // Passer
-  bouton(W - 92, HAUT + 8, 84, 30, "passer ›", actions.passer, { taille: 14 });
+  bouton(W - 92, HAUT + 8, 84, 30, t("passer ›"), actions.passer, { taille: 14 });
 }
 
 /** Le petit stylo du guide, pointe en bas à gauche. */
@@ -419,16 +420,16 @@ function fleche(ctx: CanvasRenderingContext2D, cible: V, tt: number): void {
   for (const s of [-1, 1]) trait(ctx, [bout, { x: bout.x - Math.cos(a + s * 0.5) * 14, y: bout.y - Math.sin(a + s * 0.5) * 14 }], { couleur: ROUGE, epaisseur: 3, graine: 62 + s, pate: false });
 }
 
-function finTuto(ctx: CanvasRenderingContext2D, t: Tuto, actions: { finir: (rejouer: boolean) => void; page: () => void }): void {
+function finTuto(ctx: CanvasRenderingContext2D, tu: Tuto, actions: { finir: (rejouer: boolean) => void; page: () => void }): void {
   const y = HAUT + 150;
   ctx.fillStyle = "rgba(246,239,220,0.82)";
   ctx.fillRect(0, HAUT, W, PAGE_H);
   zone(0, HAUT, W, PAGE_H, () => {});
   feuille(ctx, 30, y, W - 60, 330, "rgba(253,250,240,0.98)", 99, 0.2);
-  ecrire(ctx, "Tu sais tout !", W / 2, y + 44, { police: "titre", taille: 40 });
-  paragraphe(ctx, "Petit cercle : une tour. Trait lent : un mur. Trait rapide : une rature. Grande boucle : de la colle. Sur la vraie page, ça va plus vite : bon courage !", W / 2, y + 78, W - 110, { taille: 17 });
-  bouton(70, y + 186, W - 140, 56, "Commencer la page 1-1", actions.page, { principal: true, taille: 21 });
-  bouton(70, y + 254, (W - 150) / 2, 46, "Rejouer", () => actions.finir(true), { taille: 18 });
-  bouton(80 + (W - 150) / 2, y + 254, (W - 150) / 2, 46, "Menu", () => actions.finir(false), { taille: 18 });
-  bille(ctx, W - 70, y - 4, 90, t.temps, { joie: true });
+  ecrire(ctx, t("Tu sais tout !"), W / 2, y + 44, { police: "titre", taille: 40 });
+  paragraphe(ctx, t("Petit cercle : une tour. Trait lent : un mur. Trait rapide : une rature. Grande boucle : de la colle. Sur la vraie page, ça va plus vite : bon courage !"), W / 2, y + 78, W - 110, { taille: 17 });
+  bouton(70, y + 186, W - 140, 56, t("Commencer la page 1-1"), actions.page, { principal: true, taille: 21 });
+  bouton(70, y + 254, (W - 150) / 2, 46, t("Rejouer"), () => actions.finir(true), { taille: 18 });
+  bouton(80 + (W - 150) / 2, y + 254, (W - 150) / 2, 46, t("Menu"), () => actions.finir(false), { taille: 18 });
+  bille(ctx, W - 70, y - 4, 90, tu.temps, { joie: true });
 }

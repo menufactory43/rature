@@ -3,6 +3,7 @@ import type { Jeu } from "./jeu";
 import { POUVOIRS, TYPES_POUVOIRS, type Pouvoir } from "./pouvoirs";
 import { Rng } from "./rng";
 import { TOURS, TYPES_TOURS, type TypeTour } from "./tours";
+import { t } from "../i18n";
 
 /** Ce que les fournitures changent aux tours d'un type (l'objet est partagé par toutes ces tours). */
 export interface Boost {
@@ -36,28 +37,29 @@ const minuscule = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 function candidats(j: Jeu): Fourniture[] {
   const dispo = j.options.toursDispo;
   const res: Fourniture[] = [];
-  for (const t of TYPES_TOURS) {
-    if (!dispo.includes(t)) res.push({ id: `tour-${t}`, nom: TOURS[t].nom, texte: `Nouvelle tour : ${minuscule(TOURS[t].role)}`, famille: "tour", tour: t });
+  for (const ty of TYPES_TOURS) {
+    const nom = t(TOURS[ty].nom);
+    if (!dispo.includes(ty)) res.push({ id: `tour-${ty}`, nom, texte: t("Nouvelle tour : {role}", { role: minuscule(t(TOURS[ty].role)) }), famille: "tour", tour: ty });
     else {
-      res.push({ id: `affute-${t}`, nom: `${TOURS[t].nom} affûtée`, texte: `${TOURS[t].nom} : +30 % de dégâts`, famille: "boost", tour: t });
-      res.push({ id: `vif-${t}`, nom: `${TOURS[t].nom} vive`, texte: `${TOURS[t].nom} : tire 25 % plus vite`, famille: "boost", tour: t });
+      res.push({ id: `affute-${ty}`, nom: t("{nom} affûtée", { nom }), texte: t("{nom} : +30 % de dégâts", { nom }), famille: "boost", tour: ty });
+      res.push({ id: `vif-${ty}`, nom: t("{nom} vive", { nom }), texte: t("{nom} : tire 25 % plus vite", { nom }), famille: "boost", tour: ty });
     }
   }
   for (const p of TYPES_POUVOIRS) {
-    if (!j.options.pouvoirs?.includes(p)) res.push({ id: `pouvoir-${p}`, nom: POUVOIRS[p].nom, texte: `Nouveau pouvoir : ${minuscule(POUVOIRS[p].conseil)}`, famille: "pouvoir", pouvoir: p });
+    if (!j.options.pouvoirs?.includes(p)) res.push({ id: `pouvoir-${p}`, nom: t(POUVOIRS[p].nom), texte: t("Nouveau pouvoir : {conseil}", { conseil: minuscule(t(POUVOIRS[p].conseil)) }), famille: "pouvoir", pouvoir: p });
   }
-  if (j.options.pouvoirs?.length) res.push({ id: "recharge", nom: "Taille-crayon", texte: "Les pouvoirs rechargent 30 % plus vite", famille: "pouvoir" });
+  if (j.options.pouvoirs?.length) res.push({ id: "recharge", nom: t("Taille-crayon"), texte: t("Les pouvoirs rechargent 30 % plus vite"), famille: "pouvoir" });
   res.push(
-    { id: "longue-vue", nom: "Longue-vue", texte: "Toutes les tours : portée +15 %", famille: "boost" },
-    { id: "encrier", nom: "Encrier plein", texte: "+150 d'encre tout de suite", famille: "encre" },
-    { id: "regen", nom: "Plume agile", texte: "L'encre revient 25 % plus vite", famille: "encre" },
-    { id: "primes", nom: "Bons points", texte: "Chaque monstre rapporte 20 % de plus", famille: "encre" },
-    { id: "coeur", nom: "Cœur solide", texte: "+5 vies, et 5 de plus au maximum", famille: "defense" },
-    { id: "murs", nom: "Encre épaisse", texte: "Murs 40 % plus solides", famille: "defense" },
-    { id: "ratures", nom: "Coup de poignet", texte: "Ratures : +50 % de dégâts", famille: "defense" },
-    { id: "rabais", nom: "Soldes", texte: "Tours 15 % moins chères", famille: "encre" },
-    { id: "pacte-pv", nom: "Contrôle surprise", texte: "+250 d'encre, mais les monstres ont 20 % de PV en plus", famille: "pacte", pacte: true },
-    { id: "pacte-vies", nom: "Copie bâclée", texte: "Toutes les tours +20 % de dégâts, mais 4 vies en moins (et au maximum)", famille: "pacte", pacte: true },
+    { id: "longue-vue", nom: t("Longue-vue"), texte: t("Toutes les tours : portée +15 %"), famille: "boost" },
+    { id: "encrier", nom: t("Encrier plein"), texte: t("+150 d'encre tout de suite"), famille: "encre" },
+    { id: "regen", nom: t("Plume agile"), texte: t("L'encre revient 25 % plus vite"), famille: "encre" },
+    { id: "primes", nom: t("Bons points"), texte: t("Chaque monstre rapporte 20 % de plus"), famille: "encre" },
+    { id: "coeur", nom: t("Cœur solide"), texte: t("+5 vies, et 5 de plus au maximum"), famille: "defense" },
+    { id: "murs", nom: t("Encre épaisse"), texte: t("Murs 40 % plus solides"), famille: "defense" },
+    { id: "ratures", nom: t("Coup de poignet"), texte: t("Ratures : +50 % de dégâts"), famille: "defense" },
+    { id: "rabais", nom: t("Soldes"), texte: t("Tours 15 % moins chères"), famille: "encre" },
+    { id: "pacte-pv", nom: t("Contrôle surprise"), texte: t("+250 d'encre, mais les monstres ont 20 % de PV en plus"), famille: "pacte", pacte: true },
+    { id: "pacte-vies", nom: t("Copie bâclée"), texte: t("Toutes les tours +20 % de dégâts, mais 4 vies en moins (et au maximum)"), famille: "pacte", pacte: true },
   );
   return res;
 }

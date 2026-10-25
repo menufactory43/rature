@@ -32,6 +32,9 @@ import { aplatir, empreinte, jouerTour, type Commun } from "../coop/partage";
 import { ouvrirReglages } from "./reglages";
 import { avancerTuto, creerTuto, dessinerTuto, toucherTuto, tutoApres, tutoRefuse, type Tuto } from "./tuto";
 import { marquerTutoVu } from "../sauvegarde";
+import { anglais, t } from "../i18n";
+
+const majuscule = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop" | "tuto";
 
@@ -123,7 +126,7 @@ export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode
 /** Le tutoriel : la page 1-1, une seule tour, et Bille qui mène tout. */
 export function lancerTuto(): void {
   const page = PAGES[0];
-  demarrerPartie(() => ({ ...optionsDePage(page, { toursDispo: ["plume"], colle: true }), regles: { graine: 7, total: 99, pool: ["gribouille"], difficulte: 1, entrees: 1 }, encreDepart: 160, vies: 20 }), { mode: "tuto", libelle: "Tutoriel" });
+  demarrerPartie(() => ({ ...optionsDePage(page, { toursDispo: ["plume"], colle: true }), regles: { graine: 7, total: 99, pool: ["gribouille"], difficulte: 1, entrees: 1 }, encreDepart: 160, vies: 20 }), { mode: "tuto", libelle: t("Tutoriel") });
   if (!partie) return;
   partie.fiches = [];
   partie.tuto = creerTuto(partie.jeu);
@@ -251,13 +254,13 @@ function terminerPage(p: Partie): void {
     const premiere = !(sauvegarde.etoiles[p.page.id] > 0);
     p.record = noterPage(p.page.id, etoiles(j));
     if (premiere && p.page.debloque) {
-      p.message = p.page.debloque === "colle" ? "Nouveau geste : la colle (une grande boucle)" : `Nouvelle tour : ${TOURS[p.page.debloque].nom}`;
+      p.message = p.page.debloque === "colle" ? t("Nouveau geste : la colle (une grande boucle)") : t("Nouvelle tour : {nom}", { nom: t(TOURS[p.page.debloque].nom) });
     }
   }
   if (p.page && p.mode === "defi" && gagne && !sauvegarde.defis[p.page.id]) {
     sauvegarde.defis[p.page.id] = true;
     p.record = true;
-    p.message = "Défi réussi : un bon point de plus";
+    p.message = t("Défi réussi : un bon point de plus");
     enregistrer();
   }
   if (p.page && p.mode === "sansFin") {
@@ -506,7 +509,7 @@ export function dessinerPartie(v: Vue): void {
   if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
     const b = p.trace[p.trace.length - 1];
     const c = classer([...p.trace, { ...b, t: performance.now() }]);
-    const nom = p.sec ? "plus d'encre" : c.geste === "cercle" ? "colle" : c.geste === "tour" ? TOURS[tourDe(c.glyphe!)].nom : c.geste === "rien" ? "" : c.geste;
+    const nom = p.sec ? t("plus d'encre") : c.geste === "cercle" ? t("colle") : c.geste === "tour" ? t(TOURS[tourDe(c.glyphe!)].nom) : c.geste === "rien" ? "" : t(c.geste);
     ecrire(ctx, nom, b.x + 18, b.y - 24, { couleur: p.sec ? ROUGE : CRAYON, taille: 15 });
   }
   ctx.restore();
@@ -516,7 +519,7 @@ export function dessinerPartie(v: Vue): void {
   const aide = astuce(p);
   const parBille = billeActive() && !p.tuto;
   conseil(parBille ? aide : null);
-  const bandeau = p.arme ? `${POUVOIRS[p.arme].consigne} (touche la page pour annuler)` : parBille ? null : aide;
+  const bandeau = p.arme ? t("{consigne} (touche la page pour annuler)", { consigne: t(POUVOIRS[p.arme].consigne) }) : parBille ? null : aide;
   if (bandeau && !p.trace) {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
     feuille(ctx, 20, y - 22, W - 40, 44, "rgba(246,239,220,0.88)", 41, 0);
@@ -562,15 +565,15 @@ export function dessinerPartie(v: Vue): void {
   if (!p.tuto && !p.fin) {
     observerPartie(j, {
       mode: p.mode,
-      nouvellePage: p.mode === "campagne" && p.page && !(sauvegarde.etoiles[p.page.id] > 0) ? `Page ${p.page.id}, « ${p.page.nom} »` : undefined,
+      nouvellePage: p.mode === "campagne" && p.page && !(sauvegarde.etoiles[p.page.id] > 0) ? t("Page {id}, « {nom} »", { id: p.page.id, nom: t(p.page.nom) }) : undefined,
       sec: p.sec,
       nouveaux: p.nouveaux.length,
       dessine: !!p.trace,
       heros: !!j.heros,
       tuto: lancerTuto,
     });
-    if (p.fiches.length) dire("Une nouvelle tour ! Regarde bien son symbole : tu le dessineras en petit sur la page.", { cle: "fiche", recharge: 20, urgent: true, humeur: "joie" });
-    if (j.choix) dire("Une fourniture au choix ! Prends ce qui manque à ta défense.", { cle: "fourniture", recharge: 90, urgent: true });
+    if (p.fiches.length) dire(t("Une nouvelle tour ! Regarde bien son symbole : tu le dessineras en petit sur la page."), { cle: "fiche", recharge: 20, urgent: true, humeur: "joie" });
+    if (j.choix) dire(t("Une fourniture au choix ! Prends ce qui manque à ta défense."), { cle: "fourniture", recharge: 90, urgent: true });
     const h = j.heros;
     if (h) {
       // Bille est sur la page : ses bulles partent d'elle (ou du Cœur, quand elle attend de revenir)
@@ -633,7 +636,7 @@ function traitsCoop(p: Partie): void {
 /** Le réseau traîne ou l'autre est parti : une fiche au milieu de la page. */
 function attenteBinome(p: Partie, c: CoopPartie): void {
   if (c.parti) {
-    if (!p.fin) fx.banniere("Seul !", "ton binôme est parti, la page continue", true, 2.4);
+    if (!p.fin) fx.banniere(t("Seul !"), t("ton binôme est parti, la page continue"), true, 2.4);
     continuerSeul(p);
     return;
   }
@@ -642,9 +645,9 @@ function attenteBinome(p: Partie, c: CoopPartie): void {
   const x = 50;
   const y = HAUT + PAGE_H / 2 - 70;
   bristol(ctx, x, y, W - 100, c.absentDepuis > 6 ? 150 : 100);
-  ecrire(ctx, c.pair() ? "On attend ton binôme…" : "Ton binôme a perdu la connexion", W / 2, y + 34, { police: "titre", taille: 24 });
-  ecrire(ctx, c.pair() ? "le réseau traîne un peu" : "on l'attend une minute", W / 2, y + 64, { taille: 14, couleur: CRAYON });
-  if (c.absentDepuis > 6) bouton(110, y + 88, 180, 46, "Continuer seul", () => continuerSeul(p), { taille: 19 });
+  ecrire(ctx, c.pair() ? t("On attend ton binôme…") : t("Ton binôme a perdu la connexion"), W / 2, y + 34, { police: "titre", taille: 24 });
+  ecrire(ctx, c.pair() ? t("le réseau traîne un peu") : t("on l'attend une minute"), W / 2, y + 64, { taille: 14, couleur: CRAYON });
+  if (c.absentDepuis > 6) bouton(110, y + 88, 180, 46, t("Continuer seul"), () => continuerSeul(p), { taille: 19 });
 }
 
 let papierBande: { c: HTMLCanvasElement; cle: string } | null = null;
@@ -666,18 +669,18 @@ function choixFournitures(p: Partie, choix: Fourniture[]): void {
     p.selection = null;
     p.arme = null;
   }
-  const t = ui.temps - p.choixDepuis;
+  const tm = ui.temps - p.choixDepuis;
   ctx.save();
-  ctx.globalAlpha = Math.min(1, t * 4) * 0.7;
+  ctx.globalAlpha = Math.min(1, tm * 4) * 0.7;
   ctx.fillStyle = PAPIER;
   ctx.fillRect(0, HAUT, W, PAGE_H);
   ctx.restore();
   zone(0, HAUT, W, PAGE_H, () => {});
-  ecrire(ctx, "Choisis une fourniture", W / 2, HAUT + 60, { police: "titre", taille: 36, alpha: Math.min(1, t * 3) });
-  ecrire(ctx, `vague ${j.vague} sur ${j.regles.total} tenue`, W / 2, HAUT + 94, { taille: 15, couleur: CRAYON, alpha: Math.min(1, t * 3) });
+  ecrire(ctx, t("Choisis une fourniture"), W / 2, HAUT + 60, { police: "titre", taille: 36, alpha: Math.min(1, tm * 3) });
+  ecrire(ctx, t("vague {n} sur {total} tenue", { n: j.vague, total: j.regles.total }), W / 2, HAUT + 94, { taille: 15, couleur: CRAYON, alpha: Math.min(1, tm * 3) });
   const h = 132;
   choix.forEach((f, i) => {
-    const arrivee = Math.min(1, Math.max(0, (t - 0.1 - i * 0.12) / 0.3));
+    const arrivee = Math.min(1, Math.max(0, (tm - 0.1 - i * 0.12) / 0.3));
     const e = 1 - (1 - arrivee) ** 3;
     const x = 30 + (1 - e) * (i % 2 ? W : -W);
     const y = HAUT + 130 + i * (h + 22);
@@ -708,7 +711,7 @@ function choixFournitures(p: Partie, choix: Fourniture[]): void {
     iconeFourniture(ctx, f, 38, 74);
     ecrire(ctx, f.nom, 76, 18, { align: "left", police: "titre", taille: 24, couleur: f.pacte ? ROUGE : BLEU });
     paragraphe(ctx, f.texte, 76 + (w - 96) / 2, 56, w - 96, { taille: 15, couleur: f.pacte ? ROUGE : "#3d3f4a" });
-    if (f.pacte) ecrire(ctx, "pacte", w - 14, 18, { align: "right", taille: 14, couleur: ROUGE, rotation: 0.1 });
+    if (f.pacte) ecrire(ctx, t("pacte"), w - 14, 18, { align: "right", taille: 14, couleur: ROUGE, rotation: 0.1 });
     ctx.restore();
     if (arrivee >= 1) zone(30, y, w, h, () => choisirFourniture(j, i));
   });
@@ -745,8 +748,8 @@ function postitNouveau(p: Partie): void {
   const n = p.nouveaux[0];
   if (!n) return;
   if (n.depuis < 0) n.depuis = ui.temps;
-  const t = ui.temps - n.depuis;
-  if (t > DUREE_POSTIT) {
+  const tm = ui.temps - n.depuis;
+  if (tm > DUREE_POSTIT) {
     p.nouveaux.shift();
     return;
   }
@@ -755,8 +758,8 @@ function postitNouveau(p: Partie): void {
   const w = 176;
   const h = 128;
   // Il arrive en se décollant un peu, et repart pareil
-  const entre = Math.min(1, t / 0.25);
-  const sort = t > DUREE_POSTIT - 0.3 ? (t - (DUREE_POSTIT - 0.3)) / 0.3 : 0;
+  const entre = Math.min(1, tm / 0.25);
+  const sort = tm > DUREE_POSTIT - 0.3 ? (tm - (DUREE_POSTIT - 0.3)) / 0.3 : 0;
   const x = W - w - 12 + sort * (w + 20);
   const y = HAUT + 12 - (1 - entre) * 30;
   // Un toucher le décolle
@@ -777,10 +780,10 @@ function postitNouveau(p: Partie): void {
   ctx.rotate(-0.08);
   ctx.fillRect(-26, -h / 2 - 8, 52, 16);
   ctx.restore();
-  ecrire(ctx, "nouveau !", -w / 2 + 10, -h / 2 + 18, { align: "left", taille: 15, couleur: ROUGE, rotation: -0.05 });
+  ecrire(ctx, t("nouveau !"), -w / 2 + 10, -h / 2 + 18, { align: "left", taille: 15, couleur: ROUGE, rotation: -0.05 });
   monstre(ctx, n.type, w / 2 - 30, -h / 2 + 32, Math.min(16, f.rayon * 1.1), 3, ui.temps, ROUGE, 0);
-  ecrire(ctx, f.nom, -w / 2 + 10, -h / 2 + 46, { align: "left", police: "titre", taille: 22 });
-  paragraphe(ctx, f.conseil, 0, -h / 2 + 72, w - 20, { taille: 13, couleur: "#3d3f4a" });
+  ecrire(ctx, t(f.nom), -w / 2 + 10, -h / 2 + 46, { align: "left", police: "titre", taille: 22 });
+  paragraphe(ctx, t(f.conseil), 0, -h / 2 + 72, w - 20, { taille: 13, couleur: "#3d3f4a" });
   ctx.restore();
 }
 
@@ -789,25 +792,25 @@ function astuce(p: Partie): string | null {
   const j = p.jeu;
   const id = p.page?.id;
   if (p.mode !== "campagne" || p.fiches.length || p.selection || (sauvegarde.etoiles[id ?? ""] ?? 0) > 0) return null;
-  if (j.ennemis.some((e) => !e.mort && e.vol > 0)) return "Un voleur repart avec tes vies : rature-le avant qu'il sorte de la page, et elles reviennent !";
+  if (j.ennemis.some((e) => !e.mort && e.vol > 0)) return t("Un voleur repart avec tes vies : rature-le avant qu'il sorte de la page, et elles reviennent !");
   if (id === "1-1") {
-    if (!j.tours.length) return "Dessine un PETIT cercle à côté du chemin pointillé : une Plume.";
-    if (j.phase === "attente") return "Une tour de plus si tu peux, puis « Go ! ». Touche une tour pour l'améliorer.";
-    if (j.vague <= 2) return "Un grand trait LENT trace un mur : la horde le contourne, et le chemin s'allonge.";
-    if (j.vague <= 4) return "Un trait SEC et rapide rature ce qu'il touche. Dans le vide, l'encre est perdue.";
-    if (j.vague <= 6) return "Appelle la vague suivante plus tôt (en haut) : chaque seconde gagnée rapporte de l'encre.";
+    if (!j.tours.length) return t("Dessine un PETIT cercle à côté du chemin pointillé : une Plume.");
+    if (j.phase === "attente") return t("Une tour de plus si tu peux, puis « Go ! ». Touche une tour pour l'améliorer.");
+    if (j.vague <= 2) return t("Un grand trait LENT trace un mur : la horde le contourne, et le chemin s'allonge.");
+    if (j.vague <= 4) return t("Un trait SEC et rapide rature ce qu'il touche. Dans le vide, l'encre est perdue.");
+    if (j.vague <= 6) return t("Appelle la vague suivante plus tôt (en haut) : chaque seconde gagnée rapporte de l'encre.");
   }
-  if (id === "1-2" && j.vague <= 2) return "Des murs en travers du zigzag : plus le chemin est long, plus tes tours tirent.";
+  if (id === "1-2" && j.vague <= 2) return t("Des murs en travers du zigzag : plus le chemin est long, plus tes tours tirent.");
   const present = (t: TypeEnnemi) => j.ennemis.some((e) => !e.mort && e.type === t);
-  if (id === "1-3" && present("avion")) return "Les avions de dictée volent par-dessus les murs. Les ratures les arrêtent.";
-  if (id === "1-3" && j.vague <= 3) return "Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.";
-  if (id === "1-4" && present("tache")) return "Les fautes rongent les murs, et éclatent en lettres quand on les rature.";
-  if (id === "2-1" && j.vague <= 2) return "Les cadres « ne rien écrire » : la horde y passe, mais aucune tour ne s'y pose.";
+  if (id === "1-3" && present("avion")) return t("Les avions de dictée volent par-dessus les murs. Les ratures les arrêtent.");
+  if (id === "1-3" && j.vague <= 3) return t("Une grande boucle autour du chemin pose de la colle : tout ce qui passe dedans ralentit.");
+  if (id === "1-4" && present("tache")) return t("Les fautes rongent les murs, et éclatent en lettres quand on les rature.");
+  if (id === "2-1" && j.vague <= 2) return t("Les cadres « ne rien écrire » : la horde y passe, mais aucune tour ne s'y pose.");
   // Les pouvoirs, la première fois qu'on les a
   const nouveau = (k: Pouvoir, page: string) => id === page && j.vague >= 2 && j.recharges[k] <= 0 && j.options.pouvoirs?.includes(k);
-  if (nouveau("regle", "1-2")) return "Nouveau : la règle, en bas à droite. Touche-la, puis trace une ligne sur la horde.";
-  if (nouveau("lasso", "1-4")) return "Nouveau : le lasso. Arme-le, puis entoure un paquet de monstres.";
-  if (nouveau("gomme", "2-3")) return "Nouveau : la gomme. Arme-la, puis frotte là où ça grouille.";
+  if (nouveau("regle", "1-2")) return t("Nouveau : la règle, en bas à droite. Touche-la, puis trace une ligne sur la horde.");
+  if (nouveau("lasso", "1-4")) return t("Nouveau : le lasso. Arme-le, puis entoure un paquet de monstres.");
+  if (nouveau("gomme", "2-3")) return t("Nouveau : la gomme. Arme-la, puis frotte là où ça grouille.");
   return null;
 }
 
@@ -825,7 +828,7 @@ function apercu(p: Partie): void {
     const type = tourDe(c.glyphe!);
     const cx = trace.reduce((s, q) => s + q.x, 0) / trace.length;
     const cy = trace.reduce((s, q) => s + q.y, 0) / trace.length;
-    const refus = refusPose(j, cx, cy) || (!j.options.toursDispo.includes(type) ? "pas débloquée" : null);
+    const refus = refusPose(j, cx, cy) || (!j.options.toursDispo.includes(type) ? t("pas débloquée") : null);
     const portee = statsTour(type, 1, 0).portee;
     if (portee && portee < PORTEE_INFINIE) {
       ctx.save();
@@ -865,7 +868,7 @@ function apercu(p: Partie): void {
   const avant = j.trajets.reduce((s, t) => s + polylineLength(t), 0);
   const apres = apercuCache.trajets.reduce((s, t) => s + polylineLength(t), 0);
   const d = Math.round((apres - avant) / 10);
-  if (Math.abs(d) >= 2) ecrire(ctx, `chemin ${d > 0 ? "+" : ""}${d}`, b.x + 18, b.y - 42, { taille: 13, couleur: d > 0 ? BLEU : ROUGE });
+  if (Math.abs(d) >= 2) ecrire(ctx, t("chemin {d}", { d: (d > 0 ? "+" : "") + d }), b.x + 18, b.y - 42, { taille: 13, couleur: d > 0 ? BLEU : ROUGE });
 }
 
 const tourDe = (g: string): TypeTour => (Object.keys(TOURS) as TypeTour[]).find((t) => TOURS[t].glyphe === g)!;
@@ -876,7 +879,7 @@ function listeVague(plan: PlanVague, x: number, y: number, largeur: number, tail
   let cy = y;
   for (const it of resume(plan)) {
     const f = ENNEMIS[it.type];
-    const texte = f.boss ? f.nom : `${it.nombre} ${it.nombre > 1 ? f.pluriel : f.nom}`;
+    const texte = f.boss ? t(f.nom) : `${it.nombre} ${t(it.nombre > 1 ? f.pluriel : f.nom)}`;
     ctx.font = `${taille}px "Patrick Hand", cursive`;
     const w = 24 + ctx.measureText(texte).width + 12;
     if (cx + w > x + largeur && cx > x) {
@@ -919,17 +922,17 @@ function carteAttente(p: Partie, sansBouton = false): void {
   placeCarte.set(j, y);
   bristol(ctx, x, y, w, h);
   ecrire(ctx, p.libelle, x + 12, y + 20, { align: "left", police: "titre", taille: 26 });
-  const total = Number.isFinite(j.regles.total) ? `${j.regles.total} vagues` : "sans fin";
-  ecrire(ctx, total + (p.mode === "defi" && j.options.defi ? ` · défi : ${TEXTE_DEFI[j.options.defi].toLowerCase()}` : ""), x + 12, y + 44, { align: "left", taille: 13, couleur: CRAYON });
-  ecrire(ctx, "Vague 1 :", x + 12, y + 66, { align: "left", taille: 14, couleur: CRAYON });
+  const total = Number.isFinite(j.regles.total) ? t("{n} vagues", { n: j.regles.total }) : t("sans fin");
+  ecrire(ctx, total + (p.mode === "defi" && j.options.defi ? " · " + t("défi : {d}", { d: t(TEXTE_DEFI[j.options.defi]).toLowerCase() }) : ""), x + 12, y + 44, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, t("Vague 1 :"), x + 12, y + 66, { align: "left", taille: 14, couleur: CRAYON });
   if (j.plan) listeVague(j.plan, x + 76, y + 66, w - 200, 14);
   if (sansBouton) {
-    ecrire(ctx, "Pose tes tours,", x + w - 64, y + 52, { taille: 13, couleur: CRAYON });
-    ecrire(ctx, reglages.gaucher ? "← puis Go !" : "puis Go ! →", x + w - 64, y + 72, { taille: 15, couleur: ROUGE });
+    ecrire(ctx, t("Pose tes tours,"), x + w - 64, y + 52, { taille: 13, couleur: CRAYON });
+    ecrire(ctx, reglages.gaucher ? t("← puis Go !") : t("puis Go ! →"), x + w - 64, y + 72, { taille: 15, couleur: ROUGE });
     return;
   }
-  ecrire(ctx, "Pose tes tours, puis :", x + w - 64, y + 52, { taille: 12, couleur: CRAYON });
-  bouton(x + w - 116, y + 64, 104, 40, "Go !", () => appelerVague(p), { principal: true });
+  ecrire(ctx, t("Pose tes tours, puis :"), x + w - 64, y + 52, { taille: 12, couleur: CRAYON });
+  bouton(x + w - 116, y + 64, 104, 40, t("Go !"), () => appelerVague(p), { principal: true });
 }
 
 /** Une fiche bristol scotchée : blanche, lignée de bleu, ligne rouge en haut, deux bouts de scotch aux coins. */
@@ -976,15 +979,15 @@ function bandeauHaut(p: Partie): void {
   ecrire(ctx, "♥", 62, y, { couleur: ROUGE, taille: 22 });
   ecrire(ctx, String(j.vies), 76, y + 1, { align: "left", couleur: ROUGE, taille: 22, police: "titre" });
   const total = Number.isFinite(j.regles.total) && !p.tuto ? `/${j.regles.total}` : "";
-  ecrire(ctx, p.tuto ? "tutoriel" : `vague ${Math.max(1, j.vague)}${total}`, 112, y + 1, { align: "left", taille: 19 });
+  ecrire(ctx, p.tuto ? t("tutoriel") : t("vague {n}", { n: `${Math.max(1, j.vague)}${total}` }), 112, y + 1, { align: "left", taille: 19 });
   bouton(W - 50, y - 15, 42, 30, `×${vitesseAffichee(p)}`, () => changerVitesse(p), { taille: 17, principal: vitesseAffichee(p) > 1 });
   const droite = W - 58;
-  if (p.tuto) ecrire(ctx, "avec Bille, tout doucement", droite - 4, y, { align: "right", taille: 14, couleur: CRAYON });
+  if (p.tuto) ecrire(ctx, t("avec Bille, tout doucement"), droite - 4, y, { align: "right", taille: 14, couleur: CRAYON });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     const bonus = Math.round(j.prochaine * 2);
-    bouton(droite - 150, y - 14, 146, 28, `▸ vague ${j.vague + 1} · ${Math.ceil(j.prochaine)} s (+${bonus})`, () => appelerVague(p), { taille: 13 });
-  } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, "dernière vague !", droite - 4, y, { align: "right", taille: 15, couleur: ROUGE });
-  else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? "puis une fourniture" : "la vague arrive…", droite - 4, y, { align: "right", taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+    bouton(droite - 150, y - 14, 146, 28, t("▸ vague {n} · {s} s (+{b})", { n: j.vague + 1, s: Math.ceil(j.prochaine), b: bonus }), () => appelerVague(p), { taille: 13 });
+  } else if (j.phase === "jeu" && !j.plan) ecrire(ctx, t("dernière vague !"), droite - 4, y, { align: "right", taille: 15, couleur: ROUGE });
+  else if (j.phase === "jeu") ecrire(ctx, fournitureDue(j) ? t("puis une fourniture") : t("la vague arrive…"), droite - 4, y, { align: "right", taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
   else {
     // Le nom de la page, rapetissé s'il est long
     ctx.font = `13px "Patrick Hand", cursive`;
@@ -1025,8 +1028,8 @@ function bandeauBas(p: Partie): void {
   ].filter(Boolean).slice(0, pouvoirs.length >= 2 ? 0 : pouvoirs.length ? 2 : 3) as string[][];
   gestes.forEach(([nom, comment], i) => {
     const x = 170 + i * 76;
-    ecrire(ctx, nom, x, y0 + 15, { taille: 14 });
-    ecrire(ctx, comment, x, y0 + 30, { taille: 11, couleur: CRAYON });
+    ecrire(ctx, t(nom), x, y0 + 15, { taille: 14 });
+    ecrire(ctx, t(comment), x, y0 + 30, { taille: 11, couleur: CRAYON });
   });
   // Le pense-bête : les symboles des tours débloquées
   const types = j.options.toursDispo;
@@ -1077,14 +1080,14 @@ function bande(p: Partie): { x: number; y: number } {
   ecrire(ctx, "♥", 24, 68, { couleur: ROUGE, taille: 24 });
   ecrire(ctx, String(j.vies), 40, 69, { align: "left", couleur: ROUGE, taille: 28, police: "titre" });
   const total = Number.isFinite(j.regles.total) && !p.tuto ? `/${j.regles.total}` : "";
-  ecrire(ctx, p.tuto ? "tutoriel" : "vague", w / 2, 96, { taille: 13, couleur: CRAYON });
+  ecrire(ctx, p.tuto ? t("tutoriel") : t("vague"), w / 2, 96, { taille: 13, couleur: CRAYON });
   if (!p.tuto) ecrire(ctx, `${Math.max(1, j.vague)}${total}`, w / 2, 116, { police: "titre", taille: 24 });
   if (p.tuto) { /* le tutoriel n'appelle pas de vague */ }
-  else if (j.phase === "attente") bouton(8, 136, w - 16, 52, "Go !", () => appelerVague(p), { principal: true, sous: "vague 1" , taille: 20 });
+  else if (j.phase === "attente") bouton(8, 136, w - 16, 52, t("Go !"), () => appelerVague(p), { principal: true, sous: t("vague 1"), taille: 20 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
     bouton(8, 136, w - 16, 52, `▸ ${j.vague + 1}`, () => appelerVague(p), { sous: `${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)}`, taille: 20 });
-  } else if (j.phase === "jeu" && !j.plan) paragraphe(ctx, "dernière vague !", w / 2, 150, w - 12, { taille: 15, couleur: ROUGE });
-  else if (j.phase === "jeu") paragraphe(ctx, fournitureDue(j) ? "puis une fourniture" : "la vague arrive…", w / 2, 150, w - 12, { taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+  } else if (j.phase === "jeu" && !j.plan) paragraphe(ctx, t("dernière vague !"), w / 2, 150, w - 12, { taille: 15, couleur: ROUGE });
+  else if (j.phase === "jeu") paragraphe(ctx, fournitureDue(j) ? t("puis une fourniture") : t("la vague arrive…"), w / 2, 150, w - 12, { taille: 14, couleur: fournitureDue(j) ? ROUGE : CRAYON });
   compteurEncre(p, 20, 222, 30, 34, 248);
   const pouvoirs = j.options.pouvoirs ?? [];
   pouvoirs.forEach((k, i) => boutonPouvoir(p, k, w / 2, 292 + i * 56));
@@ -1122,19 +1125,19 @@ function panneau(p: Partie): { x: number; y: number } {
   // Les vies, la vague, l'encre
   ecrire(ctx, "♥", x0 + 8, 86, { couleur: ROUGE, taille: 30 });
   ecrire(ctx, String(j.vies), x0 + 28, 87, { align: "left", couleur: ROUGE, taille: 36, police: "titre" });
-  const total = Number.isFinite(j.regles.total) && !p.tuto ? ` sur ${j.regles.total}` : "";
-  ecrire(ctx, p.tuto ? "tutoriel" : "vague", x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
-  ecrire(ctx, p.tuto ? "Bille" : `${Math.max(1, j.vague)}${total}`, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
+  const vagueTxt = Number.isFinite(j.regles.total) && !p.tuto ? t("{a} sur {b}", { a: Math.max(1, j.vague), b: j.regles.total }) : String(Math.max(1, j.vague));
+  ecrire(ctx, p.tuto ? t("tutoriel") : t("vague"), x0 + 116, 74, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, p.tuto ? t("Bille") : vagueTxt, x0 + 116, 96, { align: "left", police: "titre", taille: 28 });
   compteurEncre(p, x0 + 236, 86, 36, x0 + 262, 116);
   ligne(ctx, { x: x0 - 10, y: 128 }, { x: droite, y: 128 }, { couleur: CRAYON, epaisseur: 1.1, graine: 83 });
   // La vague qui vient : qui, combien, et comment les prendre
   let y = 150;
   if (j.phase === "attente") {
-    const tot = Number.isFinite(j.regles.total) ? `${j.regles.total} vagues` : "sans fin";
-    ecrire(ctx, "Vague 1", x0, y, { align: "left", police: "titre", taille: 26 });
-    ecrire(ctx, tot + (p.mode === "defi" && j.options.defi ? ` · défi : ${TEXTE_DEFI[j.options.defi].toLowerCase()}` : ""), x0 + 90, y + 2, { align: "left", taille: 14, couleur: CRAYON });
-  } else if (j.plan) ecrire(ctx, `Vague ${j.vague + 1}`, x0, y, { align: "left", police: "titre", taille: 26 });
-  else ecrire(ctx, j.phase === "jeu" ? "Dernière vague !" : "", x0, y, { align: "left", police: "titre", taille: 26, couleur: ROUGE });
+    const tot = Number.isFinite(j.regles.total) ? t("{n} vagues", { n: j.regles.total }) : t("sans fin");
+    ecrire(ctx, t("Vague 1"), x0, y, { align: "left", police: "titre", taille: 26 });
+    ecrire(ctx, tot + (p.mode === "defi" && j.options.defi ? " · " + t("défi : {d}", { d: t(TEXTE_DEFI[j.options.defi]).toLowerCase() }) : ""), x0 + 90, y + 2, { align: "left", taille: 14, couleur: CRAYON });
+  } else if (j.plan) ecrire(ctx, t("Vague {n}", { n: j.vague + 1 }), x0, y, { align: "left", police: "titre", taille: 26 });
+  else ecrire(ctx, j.phase === "jeu" ? t("Dernière vague !") : "", x0, y, { align: "left", police: "titre", taille: 26, couleur: ROUGE });
   y += 30;
   if (j.plan) {
     y += listeVague(j.plan, x0, y, droite - x0, 16);
@@ -1142,43 +1145,43 @@ function panneau(p: Partie): { x: number; y: number } {
     for (const it of resume(j.plan)) {
       if (y > 236) break;
       const f = ENNEMIS[it.type];
-      y += paragraphe(ctx, `${f.nom.charAt(0).toUpperCase() + f.nom.slice(1)} : ${f.conseil}`, x0, y, droite - x0, { align: "left", taille: 14, couleur: CRAYON }) + 4;
+      y += paragraphe(ctx, t("{nom} : {conseil}", { nom: majuscule(t(f.nom)), conseil: t(f.conseil) }), x0, y, droite - x0, { align: "left", taille: 14, couleur: CRAYON }) + 4;
     }
   }
   y = Math.max(y, 262);
   if (p.tuto) { /* le tutoriel n'appelle pas de vague */ }
-  else if (j.phase === "attente") bouton(x0, y, droite - x0, 46, "Go !", () => appelerVague(p), { principal: true, sous: "pose tes tours, puis lance la vague", taille: 22 });
+  else if (j.phase === "attente") bouton(x0, y, droite - x0, 46, t("Go !"), () => appelerVague(p), { principal: true, sous: t("pose tes tours, puis lance la vague"), taille: 22 });
   else if (j.phase === "jeu" && j.prochaine !== null && j.plan) {
-    bouton(x0, y, droite - x0, 46, `▸ Appeler la vague ${j.vague + 1}`, () => appelerVague(p), { sous: `elle arrive dans ${Math.ceil(j.prochaine)} s · +${Math.round(j.prochaine * 2)} d'encre si tu l'appelles`, taille: 20 });
-  } else if (j.phase === "jeu" && j.plan) ecrire(ctx, fournitureDue(j) ? "puis une fourniture à choisir" : "la vague arrive…", x0, y + 20, { align: "left", taille: 16, couleur: fournitureDue(j) ? ROUGE : CRAYON });
+    bouton(x0, y, droite - x0, 46, t("▸ Appeler la vague {n}", { n: j.vague + 1 }), () => appelerVague(p), { sous: t("elle arrive dans {s} s · +{b} d'encre si tu l'appelles", { s: Math.ceil(j.prochaine), b: Math.round(j.prochaine * 2) }), taille: 20 });
+  } else if (j.phase === "jeu" && j.plan) ecrire(ctx, fournitureDue(j) ? t("puis une fourniture à choisir") : t("la vague arrive…"), x0, y + 20, { align: "left", taille: 16, couleur: fournitureDue(j) ? ROUGE : CRAYON });
   // Les pouvoirs : un gros bouton chacun, son nom à côté
   const pouvoirs = j.options.pouvoirs ?? [];
   y = 342;
   if (pouvoirs.length) {
-    ecrire(ctx, "Pouvoirs", x0, y, { align: "left", taille: 15, couleur: CRAYON });
+    ecrire(ctx, t("Pouvoirs"), x0, y, { align: "left", taille: 15, couleur: CRAYON });
     pouvoirs.forEach((k, i) => {
       const x = x0 + 22 + i * 116;
       boutonPouvoir(p, k, x, y + 40);
       const pret = j.recharges[k] <= 0;
-      ecrire(ctx, POUVOIRS[k].nom, x + 28, y + 34, { align: "left", taille: 15, couleur: p.arme === k ? ROUGE : pret ? BLEU : CRAYON });
-      ecrire(ctx, p.arme === k ? "trace !" : pret ? "prêt" : "recharge", x + 28, y + 52, { align: "left", taille: 12, couleur: p.arme === k ? ROUGE : CRAYON });
+      ecrire(ctx, t(POUVOIRS[k].nom), x + 28, y + 34, { align: "left", taille: 15, couleur: p.arme === k ? ROUGE : pret ? BLEU : CRAYON });
+      ecrire(ctx, p.arme === k ? t("trace !") : pret ? t("prêt") : t("recharge"), x + 28, y + 52, { align: "left", taille: 12, couleur: p.arme === k ? ROUGE : CRAYON });
     });
   }
   // Les tours : symbole, nom, prix ; on touche pour revoir la fiche
   y = 432;
-  ecrire(ctx, "Les tours : dessine le symbole sur la carte", x0, y, { align: "left", taille: 15, couleur: CRAYON });
+  ecrire(ctx, t("Les tours : dessine le symbole sur la carte"), x0, y, { align: "left", taille: 15, couleur: CRAYON });
   const types = j.options.toursDispo;
   const cols = 4;
   const cw = (droite - x0 + 10) / cols;
-  types.forEach((t, i) => {
+  types.forEach((ty, i) => {
     const cx = x0 - 10 + (i % cols) * cw + cw / 2;
     const cy = y + 46 + Math.floor(i / cols) * 82;
-    const cout = coutPose(j, t);
+    const cout = coutPose(j, ty);
     const possible = j.encre >= cout;
-    symbole(ctx, TOURS[t].glyphe, cx, cy, 13, possible ? STYLOS[t] : CRAYON, 2);
-    ecrire(ctx, TOURS[t].nom, cx, cy + 26, { taille: 14, couleur: possible ? "#2b2d38" : CRAYON });
-    ecrire(ctx, String(cout), cx, cy + 43, { taille: 14, couleur: possible ? STYLOS[t] : CRAYON });
-    zone(cx - cw / 2, cy - 24, cw, 76, () => (p.fiches = [t]));
+    symbole(ctx, TOURS[ty].glyphe, cx, cy, 13, possible ? STYLOS[ty] : CRAYON, 2);
+    ecrire(ctx, t(TOURS[ty].nom), cx, cy + 26, { taille: 14, couleur: possible ? "#2b2d38" : CRAYON });
+    ecrire(ctx, String(cout), cx, cy + 43, { taille: 14, couleur: possible ? STYLOS[ty] : CRAYON });
+    zone(cx - cw / 2, cy - 24, cw, 76, () => (p.fiches = [ty]));
   });
   // Les gestes, pour mémoire
   y = 624;
@@ -1191,10 +1194,10 @@ function panneau(p: Partie): { x: number; y: number } {
   ].filter(Boolean) as string[][];
   const gw = (droite - x0) / gestes.length;
   gestes.forEach(([comment, quoi], i) => {
-    ecrire(ctx, comment, x0 + i * gw, y + 8, { align: "left", taille: 14 });
-    ecrire(ctx, quoi, x0 + i * gw, y + 26, { align: "left", taille: 12, couleur: CRAYON });
+    ecrire(ctx, t(comment), x0 + i * gw, y + 8, { align: "left", taille: 14 });
+    ecrire(ctx, t(quoi), x0 + i * gw, y + 26, { align: "left", taille: 12, couleur: CRAYON });
   });
-  ecrire(ctx, "Touche une tour pour l'améliorer, changer sa cible ou la vendre.", x0, y + 60, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, t("Touche une tour pour l'améliorer, changer sa cible ou la vendre."), x0, y + 60, { align: "left", taille: 13, couleur: CRAYON });
   return { x: x0 + 236, y: 86 };
 }
 
@@ -1252,70 +1255,74 @@ function boutonPouvoir(p: Partie, k: Pouvoir, x: number, y: number): void {
 
 let menuOuvert: { t: Tour | null; depuis: number } = { t: null, depuis: 0 };
 
-function menuTour(p: Partie, t: Tour): void {
+function menuTour(p: Partie, to: Tour): void {
   const ctx = ui.ctx;
-  if (menuOuvert.t !== t) menuOuvert = { t, depuis: ui.temps };
+  if (menuOuvert.t !== to) menuOuvert = { t: to, depuis: ui.temps };
   const ouvre = Math.min(1, (ui.temps - menuOuvert.depuis) / 0.18);
   const j = p.jeu;
-  const f = TOURS[t.type];
-  const s = stats(t);
-  const h = t.niveau === 3 && !t.spec ? 196 : 150;
+  const f = TOURS[to.type];
+  const s = stats(to);
+  const h = to.niveau === 3 && !to.spec ? 196 : 150;
   const x = 10;
   const w = W - 20;
-  const y = t.y > PAGE_H / 2 ? HAUT + 8 : HAUT + PAGE_H - h - 8;
+  const y = to.y > PAGE_H / 2 ? HAUT + 8 : HAUT + PAGE_H - h - 8;
   zone(0, HAUT, W, PAGE_H, () => (p.selection = null));
   zone(x, y, w, h, () => {});
   // Le menu se déplie depuis la tour, avec un petit rebond
   const k = 1 - Math.exp(-ouvre * 6) * Math.cos(ouvre * 9);
   ctx.save();
-  const ox = t.x;
-  const oy = HAUT + t.y;
+  const ox = to.x;
+  const oy = HAUT + to.y;
   ctx.translate(ox, oy);
   ctx.scale(0.3 + 0.7 * k, 0.3 + 0.7 * k);
   ctx.translate(-ox, -oy);
   ctx.globalAlpha = Math.min(1, ouvre * 3);
   feuille(ctx, x, y, w, h, "rgba(255,252,240,0.97)", 120);
   boite(ctx, x, y, w, h, { epaisseur: 2, graine: 120 });
-  const titre = t.spec ? f.specs[t.spec - 1].nom : f.nom;
+  const titre = t(to.spec ? f.specs[to.spec - 1].nom : f.nom);
   ecrire(ctx, titre, x + 14, y + 22, { align: "left", police: "titre", taille: 28 });
-  ecrire(ctx, t.spec ? `${f.nom} · spécialisée` : `niveau ${t.niveau}/3`, x + 14, y + 46, { align: "left", taille: 13, couleur: CRAYON });
-  ecrire(ctx, decrireStats(t.type, s), x + 14, y + 66, { align: "left", taille: 14 });
+  ecrire(ctx, to.spec ? t("{nom} · spécialisée", { nom: t(f.nom) }) : t("niveau {n}/3", { n: to.niveau }), x + 14, y + 46, { align: "left", taille: 13, couleur: CRAYON });
+  ecrire(ctx, decrireStats(to.type, s), x + 14, y + 66, { align: "left", taille: 14 });
   bouton(x + w - 40, y + 8, 30, 28, "×", () => (p.selection = null), { taille: 18 });
   let by = y + 84;
-  if (t.niveau < 3) {
-    const cout = coutAmelioration(j, t)!;
-    bouton(x + 12, by, 170, 50, `Améliorer`, () => faire(p, { k: "ameliorer", id: t.id }, () => ameliorer(j, t)), { sous: `−${cout} d'encre`, inactif: j.encre < cout, principal: true, taille: 19 });
-  } else if (!t.spec) {
+  if (to.niveau < 3) {
+    const cout = coutAmelioration(j, to)!;
+    bouton(x + 12, by, 170, 50, t("Améliorer"), () => faire(p, { k: "ameliorer", id: to.id }, () => ameliorer(j, to)), { sous: t("−{n} d'encre", { n: cout }), inactif: j.encre < cout, principal: true, taille: 19 });
+  } else if (!to.spec) {
     f.specs.forEach((sp, i) => {
-      const cout = coutAmelioration(j, t, i + 1)!;
+      const cout = coutAmelioration(j, to, i + 1)!;
       const bx = x + 12 + i * ((w - 36) / 2 + 12);
       const bw = (w - 36) / 2;
-      bouton(bx, by, bw, 50, sp.nom, () => faire(p, { k: "ameliorer", id: t.id, spec: i + 1 }, () => ameliorer(j, t, i + 1)), { sous: `−${cout}`, inactif: j.encre < cout, principal: true, taille: 18 });
-      paragraphe(ctx, sp.texte, bx + 4, by + 56, bw - 8, { align: "left", taille: 12, couleur: CRAYON });
+      bouton(bx, by, bw, 50, t(sp.nom), () => faire(p, { k: "ameliorer", id: to.id, spec: i + 1 }, () => ameliorer(j, to, i + 1)), { sous: `−${cout}`, inactif: j.encre < cout, principal: true, taille: 18 });
+      paragraphe(ctx, t(sp.texte), bx + 4, by + 56, bw - 8, { align: "left", taille: 12, couleur: CRAYON });
     });
     by += 96;
-  } else ecrire(ctx, "au maximum", x + 96, by + 25, { taille: 16, couleur: CRAYON });
-  const bx2 = t.niveau === 3 && !t.spec ? x + 12 : x + 194;
-  if (!f.passive) bouton(bx2, t.niveau === 3 && !t.spec ? by + 8 : by, 88, 50, "Cible", () => faire(p, { k: "cible", id: t.id }, () => changerCible(t)), { sous: t.cible, taille: 16 });
-  bouton(x + w - 98, t.niveau === 3 && !t.spec ? by + 8 : by, 86, 50, "Vendre", () => faire(p, { k: "vendre", id: t.id }, () => {
-    vendre(j, t);
+  } else ecrire(ctx, t("au maximum"), x + 96, by + 25, { taille: 16, couleur: CRAYON });
+  const bx2 = to.niveau === 3 && !to.spec ? x + 12 : x + 194;
+  if (!f.passive) bouton(bx2, to.niveau === 3 && !to.spec ? by + 8 : by, 88, 50, t("Cible"), () => faire(p, { k: "cible", id: to.id }, () => changerCible(to)), { sous: t(to.cible), taille: 16 });
+  bouton(x + w - 98, to.niveau === 3 && !to.spec ? by + 8 : by, 86, 50, t("Vendre"), () => faire(p, { k: "vendre", id: to.id }, () => {
+    vendre(j, to);
     p.selection = null;
-  }), { sous: `+${valeurRevente(t)}`, taille: 16 });
+  }), { sous: `+${valeurRevente(to)}`, taille: 16 });
   ctx.restore();
 }
 
 function decrireStats(type: TypeTour, s: ReturnType<typeof stats>): string {
-  const c = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
-  const portee = s.portee >= PORTEE_INFINIE ? "portée infinie" : `portée ${s.portee}`;
+  const c = (n: number) => (anglais() ? String(Math.round(n * 100) / 100) : String(Math.round(n * 100) / 100).replace(".", ","));
+  const portee = s.portee >= PORTEE_INFINIE ? t("portée infinie") : t("portée {n}", { n: s.portee });
+  const degats = t("dégâts {n}", { n: s.degats });
+  const cadence = t("tous les {n} s", { n: c(s.intervalle) });
+  let l: (string | false | 0 | undefined)[] = [];
   switch (type) {
-    case "plume": return `dégâts ${s.degats} · tous les ${c(s.intervalle)} s · ${portee}${s.perce ? ` · traverse ${s.perce}` : ""}`;
-    case "roquette": return `dégâts ${s.degats} · zone ${s.zone} · tous les ${c(s.intervalle)} s${s.dps ? " · napalm" : ""}`;
-    case "foudre": return `dégâts ${s.degats} · ${s.rebonds} rebonds · tous les ${c(s.intervalle)} s`;
-    case "correction": return `dégâts ${s.degats} · tous les ${c(s.intervalle)} s · ${portee}`;
-    case "spirale": return `ralentit ${Math.round((s.ralenti ?? 0) * 100)} % · portée ${s.portee}${s.dps ? ` · brûle ${s.dps}/s` : ""}`;
-    case "scie": return `${s.lames} lames · ${s.dps} dégâts/s${s.ignoreArmure ? " · ignore l'armure" : ""}`;
-    case "encrier": return `+${c(s.encre ?? 0)} d'encre/s${s.interets ? " · intérêts" : ""}${s.primeBonus ? " · primes +50 %" : ""}`;
+    case "plume": l = [degats, cadence, portee, s.perce && t("traverse {n}", { n: s.perce })]; break;
+    case "roquette": l = [degats, t("zone {n}", { n: s.zone ?? 0 }), cadence, s.dps && t("napalm")]; break;
+    case "foudre": l = [degats, t("{n} rebonds", { n: s.rebonds ?? 0 }), cadence]; break;
+    case "correction": l = [degats, cadence, portee]; break;
+    case "spirale": l = [t("ralentit {n} %", { n: Math.round((s.ralenti ?? 0) * 100) }), portee, s.dps && t("brûle {n}/s", { n: s.dps })]; break;
+    case "scie": l = [t("{n} lames", { n: s.lames ?? 0 }), t("{n} dégâts/s", { n: s.dps ?? 0 }), s.ignoreArmure && t("ignore l'armure")]; break;
+    case "encrier": l = [t("+{n} d'encre/s", { n: c(s.encre ?? 0) }), s.interets && t("intérêts"), s.primeBonus && t("primes +50 %")]; break;
   }
+  return l.filter(Boolean).join(" · ");
 }
 
 /** La fiche d'une tour : le symbole qui se dessine, son prix, son rôle. */
@@ -1330,9 +1337,9 @@ function fiche(type: TypeTour, j: Jeu): void {
   feuille(ctx, x, y, w, h, "rgba(255,252,240,0.98)", 150);
   boite(ctx, x, y, w, h, { epaisseur: 2.2, graine: 150 });
   const nouvelle = !sauvegarde.appris.includes(type);
-  if (nouvelle) ecrire(ctx, "nouvelle tour !", x + w - 20, y + 22, { align: "right", taille: 15, couleur: ROUGE, rotation: 0.08 });
-  ecrire(ctx, f.nom, W / 2, y + 44, { police: "titre", taille: 40 });
-  ecrire(ctx, f.role, W / 2, y + 78, { taille: 16, couleur: CRAYON });
+  if (nouvelle) ecrire(ctx, t("nouvelle tour !"), x + w - 20, y + 22, { align: "right", taille: 15, couleur: ROUGE, rotation: 0.08 });
+  ecrire(ctx, t(f.nom), W / 2, y + 44, { police: "titre", taille: 40 });
+  ecrire(ctx, t(f.role), W / 2, y + 78, { taille: 16, couleur: CRAYON });
   // Le symbole se dessine en boucle
   const avance = Math.min(1, ((ui.temps % 2.2) / 2.2) * 1.4);
   ctx.save();
@@ -1340,34 +1347,34 @@ function fiche(type: TypeTour, j: Jeu): void {
   symbole(ctx, f.glyphe, W / 2, y + 178, 52, "rgba(60,62,75,0.3)", 2);
   ctx.restore();
   symbole(ctx, f.glyphe, W / 2, y + 178, 52, STYLOS[type], 3.5, avance);
-  paragraphe(ctx, "Dessine ce symbole en PETIT (moins de 2 cm) là où tu veux la tour.", W / 2, y + 256, w - 40, { taille: 16 });
-  ecrire(ctx, `${coutPose(j, type)} d'encre`, W / 2, y + 318, { taille: 20, couleur: BLEU });
-  ecrire(ctx, "touche pour continuer", W / 2, y + h - 18, { taille: 13, couleur: CRAYON });
+  paragraphe(ctx, t("Dessine ce symbole en PETIT (moins de 2 cm) là où tu veux la tour."), W / 2, y + 256, w - 40, { taille: 16 });
+  ecrire(ctx, t("{n} d'encre", { n: coutPose(j, type) }), W / 2, y + 318, { taille: 20, couleur: BLEU });
+  ecrire(ctx, t("touche pour continuer"), W / 2, y + h - 18, { taille: 13, couleur: CRAYON });
 }
 
 function dessinerPause(): void {
   voile(0.88);
   // Bille profite de la pause pour glisser une astuce
   if (partie && !partie.tuto) placer({ x: 40, y: H - 30, h: 84, cle: "pause", repere: "dessus", texte: astuceDe(partie.jeu.stats.tues + partie.jeu.vague * 7) });
-  ecrire(ui.ctx, "Pause", W / 2, 230, { police: "titre", taille: 64 });
-  bouton(90, 300, 220, 56, "Reprendre", () => partie && mettrePause(partie, false), { principal: true });
+  ecrire(ui.ctx, t("Pause"), W / 2, 230, { police: "titre", taille: 64 });
+  bouton(90, 300, 220, 56, t("Reprendre"), () => partie && mettrePause(partie, false), { principal: true });
   const c = partie?.coop;
   if (c) {
     // À deux : la pause vaut pour les deux, et seul l'hôte relance la page
-    ecrire(ui.ctx, `à deux · salon ${c.code}`, W / 2, 270, { taille: 15, couleur: CRAYON });
+    ecrire(ui.ctx, t("à deux · salon {code}", { code: c.code }), W / 2, 270, { taille: 15, couleur: CRAYON });
     let y = 376;
     if (c.rejouer) {
-      bouton(90, y, 220, 50, "Recommencer à deux", c.rejouer, { taille: 19 });
+      bouton(90, y, 220, 50, t("Recommencer à deux"), c.rejouer, { taille: 19 });
       y += 70;
     }
-    bouton(90, y, 220, 50, "Quitter la coop", c.quitter, { taille: 19 });
-    bouton(90, y + 70, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
+    bouton(90, y, 220, 50, t("Quitter la coop"), c.quitter, { taille: 19 });
+    bouton(90, y + 70, 160, 44, t("Réglages"), () => ouvrirReglages("partie"), { taille: 18 });
     boutonSon(262, y + 76);
     return;
   }
-  bouton(90, 376, 220, 50, "Recommencer la page", recommencer, { taille: 19 });
-  bouton(90, 446, 220, 50, "Quitter la page", () => nav.aller(partie?.mode === "jour" || partie?.mode === "interro" ? "titre" : "campagne"), { taille: 19 });
-  bouton(90, 516, 160, 44, "Réglages", () => ouvrirReglages("partie"), { taille: 18 });
+  bouton(90, 376, 220, 50, t("Recommencer la page"), recommencer, { taille: 19 });
+  bouton(90, 446, 220, 50, t("Quitter la page"), () => nav.aller(partie?.mode === "jour" || partie?.mode === "interro" ? "titre" : "campagne"), { taille: 19 });
+  bouton(90, 516, 160, 44, t("Réglages"), () => ouvrirReglages("partie"), { taille: 18 });
   boutonSon(262, 522);
 }
 
@@ -1413,8 +1420,8 @@ function etoile(x: number, y: number, r: number, pleine: boolean, graine: number
 function motDeLaProf(p: Partie): string {
   const j = p.jeu;
   const n = etoiles(j);
-  const tire = (l: string[]) => l[(j.regles.graine + j.stats.tues) % l.length];
-  if (p.mode === "interro") return j.phase === "gagne" ? "Remarquable !" : j.vague > 20 ? "Très bonne copie" : j.vague > 10 ? "Des efforts, continue" : "Il faut réviser !";
+  const tire = (l: string[]) => t(l[(j.regles.graine + j.stats.tues) % l.length]);
+  if (p.mode === "interro") return t(j.phase === "gagne" ? "Remarquable !" : j.vague > 20 ? "Très bonne copie" : j.vague > 10 ? "Des efforts, continue" : "Il faut réviser !");
   if (j.phase !== "gagne") return tire(["Revois tes murs.", "Trop de bavardages !", "Tu peux mieux faire.", "Attention aux voleurs !"]);
   if (n >= 3) return tire(["Excellent !", "Parfait, bravo !", "Très bien !"]);
   if (n === 2) return tire(["Bien. Surveille ton Cœur.", "Bon travail !", "C'est bien, continue."]);
@@ -1426,10 +1433,10 @@ export { etoile };
 function motDeBille(p: Partie): string {
   const j = p.jeu;
   const gagne = j.phase === "gagne";
-  if (p.mode === "interro") return gagne ? "Remarquable, comme dit la prof !" : "On révise un peu et on y retourne ?";
-  if (p.mode === "sansFin") return "Joli score ! On essaie de le battre ?";
-  if (!gagne) return "C'est pas grave. On recommence ? Je t'aiderai.";
-  return etoiles(j) >= 3 ? "Trois étoiles ! Je suis fière de toi." : "Bravo ! Je savais que tu y arriverais.";
+  if (p.mode === "interro") return t(gagne ? "Remarquable, comme dit la prof !" : "On révise un peu et on y retourne ?");
+  if (p.mode === "sansFin") return t("Joli score ! On essaie de le battre ?");
+  if (!gagne) return t("C'est pas grave. On recommence ? Je t'aiderai.");
+  return t(etoiles(j) >= 3 ? "Trois étoiles ! Je suis fière de toi." : "Bravo ! Je savais que tu y arriverais.");
 }
 
 function dessinerFin(p: Partie): void {
@@ -1439,16 +1446,16 @@ function dessinerFin(p: Partie): void {
   const gagne = j.phase === "gagne";
   const sansFin = p.mode === "sansFin";
   const interro = p.mode === "interro";
-  const titreFin = interro ? (gagne ? "Interro réussie !" : "Copie ramassée") : sansFin ? "Fin de la page" : gagne ? "Page gagnée !" : "Page perdue";
-  const t = ui.temps - p.finDepuis;
+  const titreFin = t(interro ? (gagne ? "Interro réussie !" : "Copie ramassée") : sansFin ? "Fin de la page" : gagne ? "Page gagnée !" : "Page perdue");
+  const tm = ui.temps - p.finDepuis;
   // Le titre s'écrit de gauche à droite
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, 60, W * Math.min(1, t / 0.5), 120);
+  ctx.rect(0, 60, W * Math.min(1, tm / 0.5), 120);
   ctx.clip();
   ecrire(ctx, titreFin, W / 2, 120, { police: "titre", taille: 54, couleur: gagne || sansFin ? BLEU : ROUGE });
   ctx.restore();
-  const apparition = Math.min(1, Math.max(0, (t - 0.3) * 3));
+  const apparition = Math.min(1, Math.max(0, (tm - 0.3) * 3));
   ctx.save();
   ctx.globalAlpha = apparition;
   if (gagne && p.mode === "campagne") {
@@ -1456,7 +1463,7 @@ function dessinerFin(p: Partie): void {
     const n = etoiles(j);
     for (let k = 0; k < 3; k++) {
       // Chaque étoile est tamponnée à son tour : elle tombe de haut, s'écrase, et l'encre gicle
-      const tk = t - 0.55 - k * 0.35;
+      const tk = tm - 0.55 - k * 0.35;
       if (tk < 0) continue;
       const sx = W / 2 - 70 + k * 70;
       const sy = 220 - (k === 1 ? 14 : 0);
@@ -1486,13 +1493,13 @@ function dessinerFin(p: Partie): void {
     ecrire(ctx, `${note}/20`, W / 2, 222, { police: "titre", taille: 58, couleur: ROUGE, rotation: -0.06 });
     cercle(ctx, W / 2, 222, 62, { couleur: ROUGE, epaisseur: 2.4, graine: 190 });
     cercle(ctx, W / 2 + 3, 220, 66, { couleur: ROUGE, epaisseur: 1.2, graine: 191, alpha: 0.7 });
-    ecrire(ctx, `${tenues} vagues tenues · ${j.prises.length} fournitures`, W / 2, 302, { taille: 16, couleur: CRAYON });
+    ecrire(ctx, t("{n} vagues tenues · {m} fournitures", { n: tenues, m: j.prises.length }), W / 2, 302, { taille: 16, couleur: CRAYON });
   } else if (sansFin) {
-    ecrire(ctx, `${j.vague - 1} vagues tenues`, W / 2, 220, { police: "titre", taille: 44, couleur: ROUGE });
+    ecrire(ctx, t("{n} vagues tenues", { n: j.vague - 1 }), W / 2, 220, { police: "titre", taille: 44, couleur: ROUGE });
   } else if (!gagne) {
-    ecrire(ctx, `tombée à la vague ${j.vague}`, W / 2, 200, { police: "titre", taille: 32, couleur: ROUGE, rotation: -0.04 });
+    ecrire(ctx, t("tombée à la vague {n}", { n: j.vague }), W / 2, 200, { police: "titre", taille: 32, couleur: ROUGE, rotation: -0.04 });
     // Le tampon de la prof
-    const tk = t - 0.6;
+    const tk = tm - 0.6;
     if (tk > 0) {
       const chute = Math.max(0, 1 - tk / 0.14);
       ctx.save();
@@ -1502,45 +1509,45 @@ function dessinerFin(p: Partie): void {
       ctx.scale(1 + chute * 1.8, 1 + chute * 1.8);
       boite(ctx, -78, -24, 156, 48, { couleur: ROUGE, epaisseur: 3.5, graine: 181 });
       boite(ctx, -72, -19, 144, 38, { couleur: ROUGE, epaisseur: 1.2, graine: 182 });
-      ecrire(ctx, "À REFAIRE", 0, 1, { police: "titre", taille: 34, couleur: ROUGE });
+      ecrire(ctx, t("À REFAIRE"), 0, 1, { police: "titre", taille: 34, couleur: ROUGE });
       ctx.restore();
     }
   } else {
-    ecrire(ctx, `${j.vies} vies gardées`, W / 2, 220, { police: "titre", taille: 40, couleur: ROUGE });
+    ecrire(ctx, t(j.vies > 1 ? "{n} vies gardées" : "{n} vie gardée", { n: j.vies }), W / 2, 220, { police: "titre", taille: 40, couleur: ROUGE });
   }
   ctx.restore();
-  if (p.record) ecrire(ctx, "record !", W / 2 + 120, 175, { couleur: ROUGE, taille: 18, rotation: 0.3 });
+  if (p.record) ecrire(ctx, t("record !"), W / 2 + 120, 175, { couleur: ROUGE, taille: 18, rotation: 0.3 });
   if (p.message) {
     boite(ctx, 40, 278, W - 80, 44, { couleur: ROUGE, epaisseur: 1.8, graine: 170 });
     ecrire(ctx, p.message, W / 2, 300, { taille: 17, couleur: ROUGE });
   }
   const precision = j.stats.ratures ? Math.round((100 * (j.stats.ratures - j.stats.ratees)) / j.stats.ratures) : 0;
-  [`monstres raturés : ${j.stats.tues}`, `vies perdues : ${j.stats.fuites}`, `tours posées : ${j.stats.toursPosees}`, `ratures dans le mille : ${precision} %`]
+  [t("monstres raturés : {n}", { n: j.stats.tues }), t("vies perdues : {n}", { n: j.stats.fuites }), t("tours posées : {n}", { n: j.stats.toursPosees }), t("ratures dans le mille : {n} %", { n: precision })]
     .forEach((l, i) => ecrire(ctx, l, W / 2, 360 + i * 28, { taille: 18 }));
-  if (t > 1.6) {
+  if (tm > 1.6) {
     const mot = motDeLaProf(p);
-    ecrire(ctx, mot, W / 2 + 10, 476, { police: "titre", taille: 26, couleur: ROUGE, rotation: -0.05, alpha: Math.min(1, (t - 1.6) * 3) });
+    ecrire(ctx, mot, W / 2 + 10, 476, { police: "titre", taille: 26, couleur: ROUGE, rotation: -0.05, alpha: Math.min(1, (tm - 1.6) * 3) });
     ctx.font = `700 26px Caveat, cursive`;
     const lm = ctx.measureText(mot).width;
-    trait(ctx, [{ x: W / 2 + 10 - lm / 2, y: 494 }, { x: W / 2 + 10 + lm / 2, y: 489 }], { couleur: ROUGE, epaisseur: 1.6, graine: 199, alpha: Math.min(1, (t - 1.6) * 3) });
+    trait(ctx, [{ x: W / 2 + 10 - lm / 2, y: 494 }, { x: W / 2 + 10 + lm / 2, y: 489 }], { couleur: ROUGE, epaisseur: 1.6, graine: 199, alpha: Math.min(1, (tm - 1.6) * 3) });
   }
-  if (t > 1.6) placer({ x: 36, y: H - 16, h: 66, cle: "fin", repere: "dessus", humeur: gagne || sansFin ? "joie" : "triste", texte: motDeBille(p) });
+  if (tm > 1.6) placer({ x: 36, y: H - 16, h: 66, cle: "fin", repere: "dessus", humeur: gagne || sansFin ? "joie" : "triste", texte: motDeBille(p) });
   if (ui.temps - p.finDepuis < 0.8) return;
   const suivante = p.page && p.mode === "campagne" && gagne ? PAGES[PAGES.indexOf(p.page) + 1] : undefined;
   let y = 512;
   if (suivante) {
-    bouton(70, y, 260, 56, "Page suivante", () => nav.ouvrirPage?.(suivante), { principal: true, taille: 22 });
+    bouton(70, y, 260, 56, t("Page suivante"), () => nav.ouvrirPage?.(suivante), { principal: true, taille: 22 });
     y += 70;
   }
   if (p.mode === "coop") {
-    if (p.coop?.rejouer) bouton(70, y, 260, 50, "Rejouer à deux", p.coop.rejouer, { principal: true, taille: 20 });
-    else ecrire(ui.ctx, p.coop ? "l'hôte peut relancer la page" : "", W / 2, y + 25, { taille: 16, couleur: CRAYON });
-    bouton(70, y + 64, 260, 50, p.coop ? "Quitter la coop" : "Menu", () => (p.coop ? p.coop.quitter() : nav.aller("titre")), { taille: 20 });
+    if (p.coop?.rejouer) bouton(70, y, 260, 50, t("Rejouer à deux"), p.coop.rejouer, { principal: true, taille: 20 });
+    else ecrire(ui.ctx, p.coop ? t("l'hôte peut relancer la page") : "", W / 2, y + 25, { taille: 16, couleur: CRAYON });
+    bouton(70, y + 64, 260, 50, p.coop ? t("Quitter la coop") : t("Menu"), () => (p.coop ? p.coop.quitter() : nav.aller("titre")), { taille: 20 });
     return;
   }
   const versMenu = p.mode === "jour" || p.mode === "interro";
-  bouton(70, y, 260, 50, p.mode === "interro" ? "Nouvelle interro" : "Rejouer cette page", recommencer, { principal: !suivante, taille: 20 });
-  bouton(70, y + 64, 260, 50, versMenu ? "Menu" : "Les cahiers", () => nav.aller(versMenu ? "titre" : "campagne"), { taille: 20 });
+  bouton(70, y, 260, 50, t(p.mode === "interro" ? "Nouvelle interro" : "Rejouer cette page"), recommencer, { principal: !suivante, taille: 20 });
+  bouton(70, y + 64, 260, 50, versMenu ? t("Menu") : t("Les cahiers"), () => nav.aller(versMenu ? "titre" : "campagne"), { taille: 20 });
 }
 
 export { PAPIER, cercle, BAS };

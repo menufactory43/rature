@@ -1,6 +1,7 @@
 // Les objets posés sur la page : ils bloquent la horde comme les taches, et ont du volume (ombre, reflets).
 import type { Objet } from "../sim/carte";
 import { hash3 } from "../sim/rng";
+import { t } from "../i18n";
 
 function ombre(ctx: CanvasRenderingContext2D): void {
   ctx.shadowColor = "rgba(40,25,10,0.35)";
@@ -175,7 +176,7 @@ function gomme3d(ctx: CanvasRenderingContext2D, l: number, e: number, bicolore: 
       ctx.font = `700 ${Math.max(7, h * 0.32)}px "Patrick Hand", sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("GOMME", w * 0.29, h * 0.55);
+      ctx.fillText(t("GOMME"), w * 0.29, h * 0.55);
     }, "#c9727e");
   } else {
     pave(ctx, l, e, (w, h) => {
@@ -187,7 +188,7 @@ function gomme3d(ctx: CanvasRenderingContext2D, l: number, e: number, bicolore: 
       ctx.font = `700 ${Math.max(7, h * 0.34)}px "Patrick Hand", sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("GOMME", w * 0.66, h * 0.55);
+      ctx.fillText(t("GOMME"), w * 0.66, h * 0.55);
     }, "#c9c3b5");
   }
 }

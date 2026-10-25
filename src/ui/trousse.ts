@@ -8,6 +8,7 @@ import { TOURS, TYPES_TOURS, type TypeTour } from "../sim/tours";
 import { enregistrer, sauvegarde, toursDebloquees } from "../progression";
 import { H, W, bouton, titre, ui, zone } from "./base";
 import { nav } from "./nav";
+import { t } from "../i18n";
 
 const cercleN = (r: number, n = 28, cx = 0, cy = 0): V[] => Array.from({ length: n + 1 }, (_, i) => ({ x: cx + Math.cos((i / n) * Math.PI * 2) * r, y: cy + Math.sin((i / n) * Math.PI * 2) * r }));
 const pts = (a: [number, number][]): V[] => a.map(([x, y]) => ({ x, y }));
@@ -53,66 +54,66 @@ function couverture(type: TypeTour): number {
 export function dessinerTrousse(): void {
   const ctx = ui.ctx;
   if (!choisi) {
-    titre("La trousse", 40, 44);
-    paragraphe(ctx, "Repasse le pochoir d'une tour : ton dessin deviendra son apparence en jeu.", W / 2, 84, 330, { taille: 15, couleur: CRAYON });
+    titre(t("La trousse"), 40, 44);
+    paragraphe(ctx, t("Repasse le pochoir d'une tour : ton dessin deviendra son apparence en jeu."), W / 2, 84, 330, { taille: 15, couleur: CRAYON });
     const debloquees = toursDebloquees();
-    TYPES_TOURS.forEach((t, i) => {
+    TYPES_TOURS.forEach((ty, i) => {
       const x = 70 + (i % 3) * 130;
       const y = 190 + Math.floor(i / 3) * 150;
-      const ok = debloquees.includes(t);
+      const ok = debloquees.includes(ty);
       boite(ctx, x - 52, y - 52, 104, 128, { couleur: ok ? BLEU : CRAYON, epaisseur: 1.6, graine: 400 + i, fond: "rgba(255,252,240,0.85)" });
       if (ok) {
         ctx.save();
         ctx.translate(x, y);
         ctx.scale(2, 2);
-        dessinerTour(ctx, { type: t, x: 0, y: 0, angle: -0.6, niveau: 1, spec: 0, temps: ui.temps, id: i });
+        dessinerTour(ctx, { type: ty, x: 0, y: 0, angle: -0.6, niveau: 1, spec: 0, temps: ui.temps, id: i });
         ctx.restore();
-        zone(x - 52, y - 52, 104, 128, () => ouvrir(t));
+        zone(x - 52, y - 52, 104, 128, () => ouvrir(ty));
       } else ecrire(ctx, "?", x, y, { police: "titre", taille: 40, couleur: CRAYON });
-      ecrire(ctx, ok ? TOURS[t].nom : "à débloquer", x, y + 56, { taille: 15, couleur: ok ? BLEU : CRAYON });
-      if (sauvegarde.apparences[t]) ecrire(ctx, "perso", x + 34, y - 40, { taille: 11, couleur: ROUGE, rotation: 0.2 });
+      ecrire(ctx, ok ? t(TOURS[ty].nom) : t("à débloquer"), x, y + 56, { taille: 15, couleur: ok ? BLEU : CRAYON });
+      if (sauvegarde.apparences[ty]) ecrire(ctx, t("perso"), x + 34, y - 40, { taille: 11, couleur: ROUGE, rotation: 0.2 });
     });
-    bouton(120, H - 62, 160, 44, "Retour", () => nav.aller("titre"));
+    bouton(120, H - 62, 160, 44, t("Retour"), () => nav.aller("titre"));
     return;
   }
-  const t = choisi;
-  titre(TOURS[t].nom, 40, 40);
-  paragraphe(ctx, "Repasse les pointillés au doigt, en autant de traits que tu veux. Ajoute ta touche : tout ce que tu dessines dans le cadre compte.", W / 2, 80, 340, { taille: 14, couleur: CRAYON });
+  const ty = choisi;
+  titre(t(TOURS[ty].nom), 40, 40);
+  paragraphe(ctx, t("Repasse les pointillés au doigt, en autant de traits que tu veux. Ajoute ta touche : tout ce que tu dessines dans le cadre compte."), W / 2, 80, 340, { taille: 14, couleur: CRAYON });
   boite(ctx, CX - 150, CY - 150, 300, 300, { couleur: CRAYON, epaisseur: 1.4, graine: 450, fond: "rgba(255,255,255,0.5)" });
   ctx.save();
   ctx.setLineDash([4, 6]);
-  for (const s of POCHOIRS[t]) trait(ctx, s.map((p) => ({ x: CX + p.x * ECHELLE, y: CY + p.y * ECHELLE })), { couleur: "rgba(60,62,75,0.45)", epaisseur: 2, amp: 0 });
+  for (const s of POCHOIRS[ty]) trait(ctx, s.map((p) => ({ x: CX + p.x * ECHELLE, y: CY + p.y * ECHELLE })), { couleur: "rgba(60,62,75,0.45)", epaisseur: 2, amp: 0 });
   ctx.restore();
   for (const [i, s] of [...traits, ...(enCours ? [enCours] : [])].entries()) trait(ctx, s.map((p) => ({ x: CX + p.x * ECHELLE, y: CY + p.y * ECHELLE })), { epaisseur: 3.5, graine: i + 1, amp: 0.4 });
-  const c = couverture(t);
-  ecrire(ctx, `pochoir repassé : ${Math.round(c * 100)} %`, CX, CY + 172, { taille: 15, couleur: c >= 0.7 ? BLEU : CRAYON });
+  const c = couverture(ty);
+  ecrire(ctx, t("pochoir repassé : {n} %", { n: Math.round(c * 100) }), CX, CY + 172, { taille: 15, couleur: c >= 0.7 ? BLEU : CRAYON });
   if (accepte && ui.temps - accepte < 1.6) {
     ctx.save();
     ctx.globalAlpha = Math.min(1, (1.6 - (ui.temps - accepte)) * 2);
     boite(ctx, CX - 90, CY - 30, 180, 56, { couleur: ROUGE, epaisseur: 3, graine: 460 });
-    ecrire(ctx, "ACCEPTÉ", CX, CY - 1, { police: "titre", taille: 40, couleur: ROUGE, rotation: -0.12 });
+    ecrire(ctx, t("ACCEPTÉ"), CX, CY - 1, { police: "titre", taille: 40, couleur: ROUGE, rotation: -0.12 });
     ctx.restore();
   } else if (accepte) {
     choisi = null;
     accepte = 0;
     return;
   }
-  bouton(20, H - 120, 112, 46, "Effacer", () => (traits = []), { taille: 18 });
-  bouton(144, H - 120, 112, 46, "Original", () => {
-    delete sauvegarde.apparences[t];
+  bouton(20, H - 120, 112, 46, t("Effacer"), () => (traits = []), { taille: 18 });
+  bouton(144, H - 120, 112, 46, t("Original"), () => {
+    delete sauvegarde.apparences[ty];
     enregistrer();
     chargerApparences();
     choisi = null;
   }, { taille: 18 });
-  bouton(268, H - 120, 112, 46, "Valider", () => {
-    if (couverture(t) < 0.7) return;
+  bouton(268, H - 120, 112, 46, t("Valider"), () => {
+    if (couverture(ty) < 0.7) return;
     debloquer("rature.trousse");
-    sauvegarde.apparences[t] = traits.map((s) => s.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 })));
+    sauvegarde.apparences[ty] = traits.map((s) => s.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 })));
     enregistrer();
     chargerApparences();
     accepte = ui.temps;
   }, { taille: 18, principal: true, inactif: c < 0.7 });
-  bouton(120, H - 62, 160, 44, "Retour", () => (choisi = null), { taille: 18 });
+  bouton(120, H - 62, 160, 44, t("Retour"), () => (choisi = null), { taille: 18 });
 }
 
 function ouvrir(t: TypeTour): void {

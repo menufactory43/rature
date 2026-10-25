@@ -2,6 +2,7 @@
 import type { V } from "../sim/geom";
 import { LARGEUR_REGLE, type Pouvoir } from "../sim/pouvoirs";
 import { hash3 } from "../sim/rng";
+import { t } from "../i18n";
 import { CRAYON, ROUGE, ecrire, trait } from "./encre";
 
 const BOIS = "rgba(231,196,128,0.96)";
@@ -109,7 +110,7 @@ export function gomme(ctx: CanvasRenderingContext2D, x: number, y: number, taill
   ctx.fillRect(-w / 2, -h / 2, w, h * 0.22);
   trait(ctx, [{ x: -w / 2, y: -h / 2 }, { x: w / 2, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }], { ferme: true, couleur: "#5a3b3f", epaisseur: 1.5, amp: 0.25, graine: 4 });
   trait(ctx, [{ x: -w / 2 + w * 0.55, y: -h / 2 }, { x: -w / 2 + w * 0.55, y: h / 2 }], { couleur: "#5a3b3f", epaisseur: 1, amp: 0.2, graine: 5 });
-  ecrire(ctx, "GOMME", -w / 2 + w * 0.27, 1, { taille: Math.max(6, taille * 0.32), couleur: "rgba(90,59,63,0.7)", police: "titre" });
+  ecrire(ctx, t("GOMME"), -w / 2 + w * 0.27, 1, { taille: Math.max(6, taille * 0.32), couleur: "rgba(90,59,63,0.7)", police: "titre" });
   ctx.restore();
 }
 

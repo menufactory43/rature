@@ -36,11 +36,11 @@ export const SUCCES: Succes[] = [
 
 export const TABLEAUX = {
   /** La page du jour : vagues × 100 + vies, remis à zéro chaque jour. */
-  jour: "rature.jour",
+  jour: "rature.classement.jour",
   /** L'interro surprise : vagues tenues. */
-  interro: "rature.interro",
+  interro: "rature.classement.interro",
   /** Les étoiles de la campagne. */
-  etoiles: "rature.etoiles",
+  etoiles: "rature.classement.etoiles",
 } as const;
 
 const BOSS: Partial<Record<TypeEnnemi | "point", string>> = { mere: "rature.serpent", compas: "rature.esperluette", taille: "rature.oe", point: "rature.dictateur" };

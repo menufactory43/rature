@@ -1,6 +1,7 @@
 // Le bureau d'écolier autour du cahier : le bois, la lumière de la lampe, et ce qui traîne à côté (crayon, gomme,
 // taille-crayon, trousse) quand l'écran laisse de la place. Dessiné une fois par taille d'écran.
 import { hash3 } from "../sim/rng";
+import { t } from "../i18n";
 
 export interface Cadre {
   x: number;
@@ -106,7 +107,7 @@ function gommeBlanche(ctx: CanvasRenderingContext2D, x: number, y: number, s: nu
   ctx.font = `700 ${s * 0.32}px "Patrick Hand", sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("GOMME", s * 0.32, 1);
+  ctx.fillText(t("GOMME"), s * 0.32, 1);
   ctx.restore();
 }
 

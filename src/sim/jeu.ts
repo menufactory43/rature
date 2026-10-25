@@ -13,6 +13,7 @@ import { Rng } from "./rng";
 import { PORTEE_INFINIE, RAYON_TOUR, TOURS, TYPES_TOURS as TYPES_TOURS_LISTE, prochainCout, pvTour, statsTour, tourDuGlyphe, type Stats, type TypeTour } from "./tours";
 import { estVagueBoss, planifier, type PlanVague, type ReglesVagues } from "./vagues";
 import { atan2, cos, hypot, sin } from "./maths";
+import { t } from "../i18n";
 
 export { LARGEUR, HAUTEUR };
 
@@ -370,7 +371,7 @@ export function lancerVague(j: Jeu): void {
   const bonus = Math.round(j.prochaine * 2);
   if (bonus > 0) {
     j.encre += bonus;
-    effet(j, "texte", LARGEUR / 2, 40, 1.2, { texte: `+${bonus} d'encre (en avance)` });
+    effet(j, "texte", LARGEUR / 2, 40, 1.2, { texte: t("+{n} d'encre (en avance)", { n: bonus }) });
   }
   demarrerVague(j);
 }
@@ -414,23 +415,23 @@ export interface Resultat {
 
 /** Où une tour peut-elle se poser ? Renvoie la raison du refus, ou null. */
 export function refusPose(j: Jeu, x: number, y: number): string | null {
-  if (x < 14 || y < 14 || x > LARGEUR - 14 || y > HAUTEUR - 14) return "trop près du bord";
-  if (dist({ x, y }, j.carte.coeur) < 30) return "trop près du Cœur";
-  if (j.carte.entrees.some((e) => dist({ x, y }, e.bord) < 26)) return "sur une entrée";
-  for (let dy = -8; dy <= 8; dy += 8) for (let dx = -8; dx <= 8; dx += 8) if (j.carte.bloque[caseDe(x + dx, y + dy)]) return "sur un obstacle";
-  if (j.carte.interdit[caseDe(x, y)]) return "on n'écrit pas dans ce cadre";
-  if (j.tours.some((t) => hypot(t.x - x, t.y - y) < RAYON_TOUR * 2 + 4)) return "trop près d'une autre tour";
-  if (j.options.defi === "quatreTours" && j.tours.length >= 4) return "4 tours maximum (défi)";
+  if (x < 14 || y < 14 || x > LARGEUR - 14 || y > HAUTEUR - 14) return t("trop près du bord");
+  if (dist({ x, y }, j.carte.coeur) < 30) return t("trop près du Cœur");
+  if (j.carte.entrees.some((e) => dist({ x, y }, e.bord) < 26)) return t("sur une entrée");
+  for (let dy = -8; dy <= 8; dy += 8) for (let dx = -8; dx <= 8; dx += 8) if (j.carte.bloque[caseDe(x + dx, y + dy)]) return t("sur un obstacle");
+  if (j.carte.interdit[caseDe(x, y)]) return t("on n'écrit pas dans ce cadre");
+  if (j.tours.some((t) => hypot(t.x - x, t.y - y) < RAYON_TOUR * 2 + 4)) return t("trop près d'une autre tour");
+  if (j.options.defi === "quatreTours" && j.tours.length >= 4) return t("4 tours maximum (défi)");
   return null;
 }
 
 export function poserTour(j: Jeu, type: TypeTour, x: number, y: number): Resultat {
   const res = { geste: "tour" as Geste, glyphe: TOURS[type].glyphe };
-  if (!j.options.toursDispo.includes(type)) return refuser(j, x, y, { ...res, ok: false, raison: `${TOURS[type].nom} : pas encore débloquée` });
+  if (!j.options.toursDispo.includes(type)) return refuser(j, x, y, { ...res, ok: false, raison: t("{nom} : pas encore débloquée", { nom: t(TOURS[type].nom) }) });
   const refus = refusPose(j, x, y);
   if (refus) return refuser(j, x, y, { ...res, ok: false, raison: refus });
   const cout = coutPose(j, type);
-  if (j.encre < cout) return refuser(j, x, y, { ...res, ok: false, raison: `il faut ${cout} d'encre` });
+  if (j.encre < cout) return refuser(j, x, y, { ...res, ok: false, raison: t("il faut {n} d'encre", { n: cout }) });
   j.encre -= cout;
   j.stats.encreDepensee += cout;
   const pv = pvTour(1, 0);
@@ -494,11 +495,11 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
   const fin = trace[trace.length - 1];
   const l = polylineLength(trace);
   if ((c.geste === "mur" && !g.mur) || (c.geste === "rature" && !g.rature) || (c.geste === "cercle" && !g.colle)) {
-    const nom = c.geste === "cercle" ? "la colle" : c.geste === "mur" ? "le mur" : "la rature";
-    return refuser(j, fin.x, fin.y, { geste: c.geste, ok: false, raison: `${nom} n'est pas permis ici` });
+    const raison = t(c.geste === "cercle" ? "la colle n'est pas permise ici" : c.geste === "mur" ? "le mur n'est pas permis ici" : "la rature n'est pas permise ici");
+    return refuser(j, fin.x, fin.y, { geste: c.geste, ok: false, raison });
   }
   const cout = c.geste === "rature" ? coutRature(l) : l * (c.geste === "mur" ? ENCRE_PAR_PX_MUR : ENCRE_PAR_PX_COLLE);
-  if (cout > j.encre + 0.5) return refuser(j, fin.x, fin.y, { geste: c.geste, ok: false, raison: "plus d'encre" });
+  if (cout > j.encre + 0.5) return refuser(j, fin.x, fin.y, { geste: c.geste, ok: false, raison: t("plus d'encre") });
   j.encre = Math.max(0, j.encre - cout);
   j.stats.encreDepensee += cout;
   if (c.geste === "rature") {
@@ -518,7 +519,7 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
     if (!touches) {
       j.stats.ratees++;
       const m = pts[Math.floor(pts.length / 2)];
-      effet(j, "texte", m.x, m.y - 14, 0.8, { texte: "raté" });
+      effet(j, "texte", m.x, m.y - 14, 0.8, { texte: t("raté") });
       j.sons.push("rate");
     } else j.sons.push("rature");
     return { geste: "rature", ok: true, touches };
@@ -566,13 +567,13 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
   const fin = trace[trace.length - 1];
   const res = (ok: boolean, raison?: string, touches?: number): Resultat => ({ geste: "rien", ok, raison, touches });
   if (j.phase !== "jeu" && j.phase !== "attente") return res(false);
-  if (!j.options.pouvoirs?.includes(p)) return refuser(j, fin.x, fin.y, res(false, "pas encore gagné"));
-  if (j.recharges[p] > 0) return refuser(j, fin.x, fin.y, res(false, `prêt dans ${Math.ceil(j.recharges[p])} s`));
+  if (!j.options.pouvoirs?.includes(p)) return refuser(j, fin.x, fin.y, res(false, t("pas encore gagné")));
+  if (j.recharges[p] > 0) return refuser(j, fin.x, fin.y, res(false, t("prêt dans {n} s", { n: Math.ceil(j.recharges[p]) })));
   const l = polylineLength(trace);
   let touches = 0;
   if (p === "regle") {
     const [a, b] = segmentRegle(trace);
-    if (hypot(b.x - a.x, b.y - a.y) < 50) return refuser(j, fin.x, fin.y, res(false, "trop court"));
+    if (hypot(b.x - a.x, b.y - a.y) < 50) return refuser(j, fin.x, fin.y, res(false, t("trop court")));
     const d = forcePouvoir(j, 45);
     for (const e of j.ennemis) {
       if (e.mort || pointSegDist(e, a, b) > LARGEUR_REGLE + e.r) continue;
@@ -585,7 +586,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
     j.sons.push("boom");
   } else if (p === "lasso") {
     const a = trace[0];
-    if (l < 80 || hypot(fin.x - a.x, fin.y - a.y) > Math.max(40, l * 0.3)) return refuser(j, fin.x, fin.y, res(false, "ferme la boucle"));
+    if (l < 80 || hypot(fin.x - a.x, fin.y - a.y) > Math.max(40, l * 0.3)) return refuser(j, fin.x, fin.y, res(false, t("ferme la boucle")));
     const poly = resample(trace, 8);
     const duree = 4.5;
     for (const e of j.ennemis) {
@@ -600,7 +601,7 @@ export function lancerPouvoir(j: Jeu, p: Pouvoir, trace: Pt[]): Resultat {
     j.evts.push({ k: "pouvoir", p, x: cx, y: cy, r: 0, pts: poly, touches });
     j.sons.push("colle");
   } else {
-    if (l < 60) return refuser(j, fin.x, fin.y, res(false, "frotte plus"));
+    if (l < 60) return refuser(j, fin.x, fin.y, res(false, t("frotte plus")));
     const z = zoneGomme(trace);
     const d = forcePouvoir(j, 110);
     for (const e of j.ennemis) {
@@ -724,7 +725,7 @@ function tuer(j: Jeu, e: Ennemi): void {
   if (j.heros && !j.heros.mort && hypot(j.heros.x - e.x, j.heros.y - e.y) < 110) gagnerXp(j, j.heros, f.prime);
   if (e.vol > 0) {
     j.rendus.push({ x: e.x, y: e.y, vies: e.vol });
-    effet(j, "texte", e.x, e.y - 20, 1.2, { texte: `${e.vol} ${e.vol > 1 ? "vies reprises" : "vie reprise"} !` });
+    effet(j, "texte", e.x, e.y - 20, 1.2, { texte: t(e.vol > 1 ? "{n} vies reprises !" : "{n} vie reprise !", { n: e.vol }) });
     j.evts.push({ k: "repris", x: e.x, y: e.y, vies: e.vol });
     j.sons.push("ding");
     e.vol = 0;
@@ -965,7 +966,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       }
       if (e.ri >= e.retour.length && d < 4) {
         e.mort = true;
-        effet(j, "texte", Math.max(30, Math.min(370, e.x)), Math.max(20, Math.min(700, e.y)), 1.4, { texte: `${e.vol} ${e.vol > 1 ? "vies perdues" : "vie perdue"}` });
+        effet(j, "texte", Math.max(30, Math.min(370, e.x)), Math.max(20, Math.min(700, e.y)), 1.4, { texte: t(e.vol > 1 ? "{n} vies perdues" : "{n} vie perdue", { n: e.vol }) });
         j.evts.push({ k: "evade", x: e.x, y: e.y, vies: e.vol });
         e.vol = 0;
       }
@@ -1278,7 +1279,7 @@ function gagnerXp(j: Jeu, h: Heros, xp: number): void {
     const avant = h.pvMax;
     h.pvMax = pvHeros(h.niveau);
     h.pv += h.pvMax - avant;
-    effet(j, "texte", h.x, h.y - 34, 1.4, { texte: `niveau ${h.niveau} !` });
+    effet(j, "texte", h.x, h.y - 34, 1.4, { texte: t("niveau {n} !", { n: h.niveau }) });
     j.evts.push({ k: "niveau", n: h.niveau, x: h.x, y: h.y });
     j.sons.push("ding");
   }
@@ -1301,7 +1302,7 @@ function avancerHeros(j: Jeu, h: Heros, dt: number): void {
   if (h.pv <= 0) {
     h.mort = RETOUR_HEROS;
     h.pv = 0;
-    effet(j, "texte", h.x, h.y - 30, 1.4, { texte: "Bille tombe !" });
+    effet(j, "texte", h.x, h.y - 30, 1.4, { texte: t("Bille tombe !") });
     j.evts.push({ k: "tombe", x: h.x, y: h.y });
     j.sons.push("aie");
     return;

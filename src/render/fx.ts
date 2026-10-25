@@ -7,6 +7,7 @@ import { BLEU, CRAYON, ROUGE, ecrire, pointsCercle, trait } from "./encre";
 import { vibrer } from "../vibre";
 import { reglages } from "../reglages";
 import { monstre } from "./monstres";
+import { t } from "../i18n";
 
 type Genre = "goutte" | "tache" | "fumee" | "tiret" | "anneau" | "papier" | "etincelle" | "plus" | "encre";
 
@@ -143,7 +144,7 @@ export function absorber(j: Jeu, dt: number): void {
           secouer(12);
           fx.flash = 0.6;
           fx.flashCouleur = BLEU;
-          banniere(`${f.nom} raturé${f.nom.startsWith("la ") || f.nom.includes("Esperluette") ? "e" : ""} !`, undefined, false, 2);
+          banniere(t(f.nom.startsWith("la ") || f.nom.includes("Esperluette") ? "{nom} raturée !" : "{nom} raturé !", { nom: t(f.nom) }), undefined, false, 2);
           for (let k = 0; k < 18; k++) ajouter("papier", e.x, e.y, { vx: hasard(-200, 200), vy: hasard(-200, 200), vie: hasard(0.8, 1.4), r: hasard(3, 6), vr: hasard(-10, 10), couleur: "#fffaf0" });
         }
         break;
@@ -207,11 +208,11 @@ export function absorber(j: Jeu, dt: number): void {
       case "vague":
         if (e.boss) {
           vibrer("fort");
-          banniere("BOSS", ENNEMIS[e.boss].nom, true, 2.4);
+          banniere(t("BOSS"), t(ENNEMIS[e.boss].nom), true, 2.4);
           secouer(8);
           fx.flash = 0.4;
           fx.flashCouleur = ROUGE;
-        } else banniere(`Vague ${e.n}`, Number.isFinite(j.regles.total) ? `sur ${j.regles.total}` : undefined);
+        } else banniere(t("Vague {n}", { n: e.n }), Number.isFinite(j.regles.total) ? t("sur {n}", { n: j.regles.total }) : undefined);
         break;
       case "eclair":
         for (const q of e.pts.slice(1)) for (let k = 0; k < 3; k++) {
@@ -240,7 +241,7 @@ export function absorber(j: Jeu, dt: number): void {
         secouer(4);
         ajouter("anneau", e.x, e.y, { vie: 0.5, r: 34, couleur: ROUGE });
         for (let k = 0; k < 6; k++) ajouter("plus", e.x + hasard(-12, 12), e.y + hasard(-8, 8), { vx: hasard(-20, 20), vy: hasard(-70, -40), vie: hasard(0.6, 0.9), r: hasard(3, 5), couleur: ROUGE });
-        if (j.vies <= 0) banniere("Rattrapé !", `${e.vies} ${e.vies > 1 ? "vies reprises" : "vie reprise"}`, true, 1.6);
+        if (j.vies <= 0) banniere(t("Rattrapé !"), t(e.vies > 1 ? "{n} vies reprises" : "{n} vie reprise", { n: e.vies }), true, 1.6);
         break;
       case "rendu":
         vibrer("leger");
@@ -264,7 +265,7 @@ export function absorber(j: Jeu, dt: number): void {
           // Les miettes de gomme
           for (let k = 0; k < 22; k++) ajouter("papier", e.x + hasard(-e.r, e.r) * 0.7, e.y + hasard(-e.r, e.r) * 0.7, { vx: hasard(-90, 90), vy: hasard(-90, 90), vie: hasard(0.6, 1.1), r: hasard(1.5, 3), vr: hasard(-10, 10), couleur: k % 3 ? "#e9a3ad" : "#8fb0dd", age: -hasard(0, 0.5) });
         }
-        if (e.touches >= 6) banniere("Carton !", `${e.touches} touchés`, true, 1.2);
+        if (e.touches >= 6) banniere(t("Carton !"), t("{n} touchés", { n: e.touches }), true, 1.2);
         break;
       case "pret":
         vibrer("leger");

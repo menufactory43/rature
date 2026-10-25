@@ -8,6 +8,7 @@ import type { Jeu } from "../sim/jeu";
 import { changer, reglages } from "../reglages";
 import { H, W, bouton, ui, zone } from "./base";
 import type { Ecran } from "./nav";
+import { t } from "../i18n";
 
 export type Humeur = "joie" | "triste" | "surprise";
 
@@ -117,24 +118,22 @@ const ASTUCES = [
 
 /** L'astuce suivante, chacune son tour. */
 export function astuceSuivante(): string {
-  return ASTUCES[etat.astuce++ % ASTUCES.length];
+  return t(ASTUCES[etat.astuce++ % ASTUCES.length]);
 }
 
 /** Une astuce qui ne change pas tant que la graine ne change pas (pour la pause). */
-export const astuceDe = (graine: number) => ASTUCES[Math.abs(Math.round(graine)) % ASTUCES.length];
-
-const ON_DIRAIT = "On dirait que tu essaies de ";
+export const astuceDe = (graine: number) => t(ASTUCES[Math.abs(Math.round(graine)) % ASTUCES.length]);
 
 /** Toucher Bille : une astuce, et de quoi revoir le tutoriel. */
 export function toucherBille(tuto?: () => void): void {
   if (!reglages.bille) return;
-  const cache = { texte: "Cache-toi", action: cacher };
-  dire(astuceSuivante(), { urgent: true, duree: 9, choix: tuto ? [{ texte: "Revoir le tutoriel", action: tuto }, cache] : [cache] });
+  const cache = { texte: t("Cache-toi"), action: cacher };
+  dire(astuceSuivante(), { urgent: true, duree: 9, choix: tuto ? [{ texte: t("Revoir le tutoriel"), action: tuto }, cache] : [cache] });
 }
 
 /** Le joueur n'en veut plus : elle dit au revoir, s'efface, et ne revient que si on la recoche dans les réglages. */
 export function cacher(): void {
-  dire("D'accord, je file ! Tu pourras me rappeler dans les Réglages.", { urgent: true, humeur: "triste", duree: DEPART });
+  dire(t("D'accord, je file ! Tu pourras me rappeler dans les Réglages."), { urgent: true, humeur: "triste", duree: DEPART });
   etat.depart = ui.temps;
 }
 const DEPART = 2.8;
@@ -290,7 +289,7 @@ export function compagnonMenu(ecran: Ecran, tuto: () => void): void {
     taire();
     etat.fixe = null;
     const intro = INTROS[ecran];
-    if (intro) dire(intro[0], { cle: "intro-" + ecran, unique: true, humeur: intro[1], duree: 7 });
+    if (intro) dire(t(intro[0]), { cle: "intro-" + ecran, unique: true, humeur: intro[1], duree: 7 });
   }
   if (ecran === "titre") return;
   const pl = PLACES[ecran] ?? { x: 36, y: H - 18, h: 62 };
@@ -300,15 +299,15 @@ export function compagnonMenu(ecran: Ecran, tuto: () => void): void {
 /** Le titre : Bille en grand à côté du nom du jeu ; la première fois, elle propose le tutoriel. */
 export function compagnonTitre(ctx: CanvasRenderingContext2D, tutoVu: boolean, tuto: () => void): void {
   if (ecranAvant !== "titre") compagnonMenu("titre", tuto);
-  const t = ui.temps;
-  if (tutoVu && t - calmeDepuis > 25)
-    dire(ON_DIRAIT + "jouer à un jeu. Veux-tu de l'aide ?", {
-      cle: "titre-aide", duree: 12, choix: [{ texte: "Oui, montre-moi", action: tuto }, { texte: "Non merci", action: taire }],
+  const tm = ui.temps;
+  if (tutoVu && tm - calmeDepuis > 25)
+    dire(t("On dirait que tu essaies de jouer à un jeu. Veux-tu de l'aide ?"), {
+      cle: "titre-aide", duree: 12, choix: [{ texte: t("Oui, montre-moi"), action: tuto }, { texte: t("Non merci"), action: taire }],
     });
-  const premiere = !tutoVu && t > 1.2 ? "Première fois ? Touche-moi : je t'explique tout, tout doucement." : undefined;
+  const premiere = !tutoVu && tm > 1.2 ? t("Première fois ? Touche-moi : je t'explique tout, tout doucement.") : undefined;
   dessinerCompagnon(ctx, {
     x: 44, y: 252, h: 92, bulle: { x: 74, y: 24, w: W - 148 }, texte: parle() ? undefined : premiere,
-    touche: () => (tutoVu && reglages.bille ? dire("Besoin d'aide ?", { urgent: true, duree: 10, choix: [{ texte: "Le tutoriel", action: tuto }, { texte: "Une astuce", action: () => dire(astuceSuivante(), { urgent: true }) }, { texte: "Cache-toi", action: cacher }] }) : tuto()),
+    touche: () => (tutoVu && reglages.bille ? dire(t("Besoin d'aide ?"), { urgent: true, duree: 10, choix: [{ texte: t("Le tutoriel"), action: tuto }, { texte: t("Une astuce"), action: () => dire(astuceSuivante(), { urgent: true }) }, { texte: t("Cache-toi"), action: cacher }] }) : tuto()),
   });
   // Toucher la bulle de la première fois lance aussi le tutoriel
   if (premiere && reglages.bille && !parle()) zone(74, 24, W - 148, 60, tuto);
@@ -353,23 +352,23 @@ const tirer = <T>(l: T[]) => l[Math.floor(Math.random() * l.length)];
 export function observerPartie(j: Jeu, info: InfoPartie): void {
   ecranAvant = "partie";
   if (!reglages.bille) return;
-  const t = ui.temps;
+  const tm = ui.temps;
   let s = suivis.get(j);
   if (!s) {
-    s = { debut: t, fuites: 0, tues: 0, ratures: 0, ratees: 0, poses: 0, dernierePose: t, bossVus: new Set(), monstres: false, alerte: false, ratesDites: 0, nouveaux: 0 };
+    s = { debut: tm, fuites: 0, tues: 0, ratures: 0, ratees: 0, poses: 0, dernierePose: tm, bossVus: new Set(), monstres: false, alerte: false, ratesDites: 0, nouveaux: 0 };
     suivis.set(j, s);
     taire();
     const accueil =
-      info.mode === "interro" ? "Une interro surprise ! Pas de panique, je suis là."
-      : info.mode === "jour" ? "La page du jour : la même pour tout le monde. Fais mieux que les autres !"
-      : info.mode === "coop" ? "À deux, c'est mieux ! Partagez bien l'encre."
-      : info.nouvellePage ? `${info.nouvellePage}. Une nouvelle page ! Prends le temps de regarder le chemin.`
-      : info.mode === "sansFin" ? "Sans fin : on tient le plus longtemps possible. Courage !"
-      : tirer(["On remet ça ?", "Allez, cette fois c'est la bonne.", "Je sens que ça va bien se passer."]);
+      info.mode === "interro" ? t("Une interro surprise ! Pas de panique, je suis là.")
+      : info.mode === "jour" ? t("La page du jour : la même pour tout le monde. Fais mieux que les autres !")
+      : info.mode === "coop" ? t("À deux, c'est mieux ! Partagez bien l'encre.")
+      : info.nouvellePage ? t("{page}. Une nouvelle page ! Prends le temps de regarder le chemin.", { page: info.nouvellePage })
+      : info.mode === "sansFin" ? t("Sans fin : on tient le plus longtemps possible. Courage !")
+      : t(tirer(["On remet ça ?", "Allez, cette fois c'est la bonne.", "Je sens que ça va bien se passer."]));
     // La toute première fois, elle se présente : et dit comment la faire taire ; puis, la première fois sur la page, comment la déplacer
-    if (info.heros && dire("Je descends sur la page avec toi ! Fais-moi glisser du doigt pour m'envoyer barrer la route aux monstres.", { cle: "heros-intro", unique: true, urgent: true, duree: 7, humeur: "joie" })) {
+    if (info.heros && dire(t("Je descends sur la page avec toi ! Fais-moi glisser du doigt pour m'envoyer barrer la route aux monstres."), { cle: "heros-intro", unique: true, urgent: true, duree: 7, humeur: "joie" })) {
       /* déjà dit */
-    } else if (!dire("Coucou, c'est Bille ! Touche-moi pour une astuce… ou pour me cacher si je t'embête.", { cle: "presentation", unique: true, urgent: true, duree: 6, humeur: "joie" }))
+    } else if (!dire(t("Coucou, c'est Bille ! Touche-moi pour une astuce… ou pour me cacher si je t'embête."), { cle: "presentation", unique: true, urgent: true, duree: 6, humeur: "joie" }))
       dire(accueil, { urgent: true, duree: 4.5, humeur: "joie" });
   }
   const st = j.stats;
@@ -377,36 +376,36 @@ export function observerPartie(j: Jeu, info: InfoPartie): void {
   if (st.fuites > s.fuites) {
     if (!s.alerte && j.vies > 0 && j.vies <= j.viesMax * 0.3) {
       s.alerte = true;
-      dire(`Plus que ${j.vies} vie${j.vies > 1 ? "s" : ""} ! Rature tout ce qui approche du Cœur.`, { urgent: true, humeur: "surprise" });
-    } else dire(tirer(["Aïe ! Un monstre est passé.", "Oups, il en est passé un.", "Le Cœur a pris un coup."]), { cle: "fuite", recharge: 25, humeur: "triste" });
+      dire(t(j.vies > 1 ? "Plus que {n} vies ! Rature tout ce qui approche du Cœur." : "Plus que {n} vie ! Rature tout ce qui approche du Cœur.", { n: j.vies }), { urgent: true, humeur: "surprise" });
+    } else dire(t(tirer(["Aïe ! Un monstre est passé.", "Oups, il en est passé un.", "Le Cœur a pris un coup."])), { cle: "fuite", recharge: 25, humeur: "triste" });
   }
   // Une belle rature
   const tuesDuCoup = st.tues - s.tues;
-  if (st.ratures > s.ratures && tuesDuCoup >= 3) dire(tuesDuCoup >= 5 ? `${tuesDuCoup} d'un coup ! Quelle rature !` : `${tuesDuCoup} d'un coup !`, { cle: "multi", recharge: 12, humeur: "joie", urgent: true });
-  if (st.ratees > s.ratees && s.ratesDites < 2 && dire("Une rature dans le vide, c'est de l'encre perdue. Vise les monstres !", { cle: "rate", recharge: 40 })) s.ratesDites++;
+  if (st.ratures > s.ratures && tuesDuCoup >= 3) dire(t(tuesDuCoup >= 5 ? "{n} d'un coup ! Quelle rature !" : "{n} d'un coup !", { n: tuesDuCoup }), { cle: "multi", recharge: 12, humeur: "joie", urgent: true });
+  if (st.ratees > s.ratees && s.ratesDites < 2 && dire(t("Une rature dans le vide, c'est de l'encre perdue. Vise les monstres !"), { cle: "rate", recharge: 40 })) s.ratesDites++;
   // Un boss
   for (const e of j.ennemis) {
     const f = ENNEMIS[e.type];
     if (e.mort || !f.boss || s.bossVus.has(e.type) || e.y < 0) continue;
     s.bossVus.add(e.type);
-    dire(`Attention : ${f.nom} ! ${f.conseil}`, { urgent: true, humeur: "surprise", duree: 7 });
+    dire(t("Attention : {nom} ! {conseil}", { nom: t(f.nom), conseil: t(f.conseil) }), { urgent: true, humeur: "surprise", duree: 7 });
   }
   // Un monstre jamais vu : son post-it arrive
-  if (info.nouveaux > s.nouveaux) dire("Oh, une nouvelle tête ! Lis bien le post-it.", { cle: "nouveau", recharge: 10, humeur: "surprise" });
+  if (info.nouveaux > s.nouveaux) dire(t("Oh, une nouvelle tête ! Lis bien le post-it."), { cle: "nouveau", recharge: 10, humeur: "surprise" });
   s.nouveaux = info.nouveaux;
-  if (info.sec) dire("Plus d'encre dans le stylo ! Elle revient toute seule, et chaque monstre raturé en rapporte.", { cle: "sec", recharge: 30 });
+  if (info.sec) dire(t("Plus d'encre dans le stylo ! Elle revient toute seule, et chaque monstre raturé en rapporte."), { cle: "sec", recharge: 30 });
   // L'encre qui dort
-  if (st.toursPosees > s.poses) s.dernierePose = t;
-  if (j.phase === "jeu" && j.encre >= 150 && t - s.dernierePose > 25) dire(`Tu as ${Math.floor(j.encre)} d'encre qui dort. Une tour de plus ?`, { cle: "encre", recharge: 50 });
+  if (st.toursPosees > s.poses) s.dernierePose = tm;
+  if (j.phase === "jeu" && j.encre >= 150 && tm - s.dernierePose > 25) dire(t("Tu as {n} d'encre qui dort. Une tour de plus ?", { n: Math.floor(j.encre) }), { cle: "encre", recharge: 50 });
   // Une vague tenue
   const vivants = j.ennemis.some((e) => !e.mort);
-  if (s.monstres && !vivants && !j.file.length && j.phase === "jeu" && Math.random() < 0.5) dire(tirer(["Vague tenue !", "Et une de plus !", "Propre !"]), { cle: "vague", recharge: 30, humeur: "joie" });
+  if (s.monstres && !vivants && !j.file.length && j.phase === "jeu" && Math.random() < 0.5) dire(t(tirer(["Vague tenue !", "Et une de plus !", "Propre !"])), { cle: "vague", recharge: 30, humeur: "joie" });
   s.monstres = vivants;
   // On hésite avant la première vague
   if (j.phase === "attente" && info.mode !== "coop") {
-    if (!j.tours.length && t - s.debut > 15)
-      dire(ON_DIRAIT + "défendre une page. Veux-tu de l'aide ?", { cle: "hesite", duree: 14, choix: [{ texte: "Oui, le tutoriel", action: info.tuto }, { texte: "Non merci", action: taire }] });
-    else if (j.tours.length && t - s.dernierePose > 20) dire("Quand tu es prêt, touche « Go ! ». Je ne regarde pas.", { cle: "go", recharge: 60 });
+    if (!j.tours.length && tm - s.debut > 15)
+      dire(t("On dirait que tu essaies de défendre une page. Veux-tu de l'aide ?"), { cle: "hesite", duree: 14, choix: [{ texte: t("Oui, le tutoriel"), action: info.tuto }, { texte: t("Non merci"), action: taire }] });
+    else if (j.tours.length && tm - s.dernierePose > 20) dire(t("Quand tu es prêt, touche « Go ! ». Je ne regarde pas."), { cle: "go", recharge: 60 });
   }
   s.fuites = st.fuites;
   s.tues = st.tues;
@@ -418,7 +417,7 @@ export function observerPartie(j: Jeu, info: InfoPartie): void {
 /** Un geste refusé : elle explique, façon trombone. */
 export function refusBille(geste: Geste, raison: string): void {
   const quoi: Record<Geste, string> = { tour: "poser une tour", mur: "tracer un mur", rature: "raturer", cercle: "poser de la colle", rien: "dessiner" };
-  dire(`${ON_DIRAIT}${quoi[geste]}… mais ${raison}.`, { cle: "refus", recharge: 8, urgent: true });
+  dire(t("On dirait que tu essaies de {quoi}… mais {raison}.", { quoi: t(quoi[geste]), raison }), { cle: "refus", recharge: 8, urgent: true });
 }
 
 // --- Bille par-dessus tout, qu'on déplace au doigt ---
@@ -496,8 +495,8 @@ export function lacher(): boolean {
     } catch {
       // Elle reviendra à sa place la prochaine fois
     }
-    dire(tirer(["Ici, c'est parfait.", "Merci, je voyais mal de là-bas.", "Je ne gêne plus ?", "Hop !"]), { cle: "pose", recharge: 20, urgent: true, humeur: "joie" });
-  } else if (p.dormait) dire("Hein ? Je ne dormais pas ! Je… réfléchissais.", { urgent: true, humeur: "surprise" });
+    dire(t(tirer(["Ici, c'est parfait.", "Merci, je voyais mal de là-bas.", "Je ne gêne plus ?", "Hop !"])), { cle: "pose", recharge: 20, urgent: true, humeur: "joie" });
+  } else if (p.dormait) dire(t("Hein ? Je ne dormais pas ! Je… réfléchissais."), { urgent: true, humeur: "surprise" });
   else dessinee?.pl.touche?.();
   return true;
 }

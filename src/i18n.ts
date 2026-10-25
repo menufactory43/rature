@@ -8,9 +8,18 @@ export type Langue = "fr" | "en";
 
 export const anglais = () => reglages.langue === "en";
 
+/** Les phrases rencontrées en anglais sans traduction (pour les contrôles à l'œil et les tests). */
+export const manques = new Set<string>();
+
 /** Le texte dans la langue du joueur ; les {noms} sont remplacés par les valeurs données. */
 export function t(fr: string, vars?: Record<string, string | number>): string {
-  let s = reglages.langue === "en" ? (EN[fr] ?? fr) : fr;
+  let s = fr;
+  if (reglages.langue === "en") {
+    const en = EN[fr];
+    if (en === undefined) {
+      if (/[a-zà-ÿ]{3}/i.test(fr)) manques.add(fr);
+    } else s = en;
+  }
   if (vars) s = s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
   return s;
 }

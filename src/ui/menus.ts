@@ -14,6 +14,7 @@ import { grainePageDuJour, tutoVu } from "../sauvegarde";
 import { compagnonTitre } from "./compagnon";
 import { gameCenterDispo, ouvrirGameCenter } from "../succes";
 import { H, W, bouton, boutonSon, titre, ui, zone } from "./base";
+import { t } from "../i18n";
 import { nav } from "./nav";
 import { ouvrirReglages } from "./reglages";
 import { ouvrirCoop } from "./coop";
@@ -30,23 +31,23 @@ export const actions = {
 
 export function dessinerTitre(): void {
   const ctx = ui.ctx;
-  const t = ui.temps;
+  const tps = ui.temps;
   // Le titre s'écrit au lancement, puis se fait souligner
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, 60, 60 + Math.min(1, t / 0.9) * 300, 140);
+  ctx.rect(0, 60, 60 + Math.min(1, tps / 0.9) * 300, 140);
   ctx.clip();
   ecrire(ctx, "Rature", W / 2, 150, { police: "titre", taille: 100 });
   ctx.restore();
-  const souligne = Math.max(0, Math.min(1, (t - 0.8) / 0.35));
+  const souligne = Math.max(0, Math.min(1, (tps - 0.8) / 0.35));
   if (souligne > 0) trait(ctx, [{ x: 90, y: 204 }, { x: 90 + 110 * Math.min(1, souligne * 2), y: 208 }, ...(souligne > 0.5 ? [{ x: 90 + 220 * souligne, y: 202 }] : [])], { couleur: ROUGE, epaisseur: 2.4, graine: 2 });
-  ecrire(ctx, "un tower defense au stylo bille", W / 2, 236, { couleur: CRAYON, taille: 18, alpha: Math.min(1, Math.max(0, (t - 1) * 2)) });
+  ecrire(ctx, t("un tower defense au stylo bille"), W / 2, 236, { couleur: CRAYON, taille: 18, alpha: Math.min(1, Math.max(0, (tps - 1) * 2)) });
   // Bille, la mascotte, à côté du titre : la première fois, elle propose le tutoriel
   compagnonTitre(ctx, tutoVu(), () => actions.tuto());
   // Une petite bataille : les monstres passent, les tours tirent, et ils se font raturer
   const types: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "punaise", "postit"];
   const MORT = 262;
-  const monstres = types.map((ty, i) => ({ ty, i, x: ((t * 30 + i * 70) % 490) - 40, y: 410 + Math.sin(i * 2) * 8 }));
+  const monstres = types.map((ty, i) => ({ ty, i, x: ((tps * 30 + i * 70) % 490) - 40, y: 410 + Math.sin(i * 2) * 8 }));
   // Les taches laissées sur la page
   ctx.save();
   ctx.fillStyle = "rgba(196,48,43,0.14)";
@@ -66,12 +67,12 @@ export function dessinerTitre(): void {
   for (const to of tours) {
     const c = viser(to.x, to.y);
     const angle = c ? Math.atan2(c.y - to.y, c.x - to.x) : -Math.PI / 2;
-    const phase = (t / to.cadence + to.id * 0.3) % 1;
-    dessinerTour(ctx, { type: to.type, x: to.x, y: to.y, angle, niveau: to.id === 2 ? 3 : 2, spec: to.id === 3 ? 1 : 0, recul: c ? Math.max(0, 1 - phase * 5) : 0, temps: t, id: to.id });
+    const phase = (tps / to.cadence + to.id * 0.3) % 1;
+    dessinerTour(ctx, { type: to.type, x: to.x, y: to.y, angle, niveau: to.id === 2 ? 3 : 2, spec: to.id === 3 ? 1 : 0, recul: c ? Math.max(0, 1 - phase * 5) : 0, temps: tps, id: to.id });
     if (!c) continue;
     if (to.type === "foudre" && phase < 0.12) {
       const pts = [{ x: to.x, y: to.y }];
-      for (let k = 1; k < 6; k++) pts.push({ x: to.x + ((c.x - to.x) * k) / 6 + Math.sin(k * 7 + t * 50) * 6, y: to.y + ((c.y - to.y) * k) / 6 + Math.cos(k * 5 + t * 40) * 6 });
+      for (let k = 1; k < 6; k++) pts.push({ x: to.x + ((c.x - to.x) * k) / 6 + Math.sin(k * 7 + tps * 50) * 6, y: to.y + ((c.y - to.y) * k) / 6 + Math.cos(k * 5 + tps * 40) * 6 });
       pts.push({ x: c.x, y: c.y });
       trait(ctx, pts, { couleur: "rgba(90,130,230,0.35)", epaisseur: 6, amp: 1.5 });
       trait(ctx, pts, { epaisseur: 2, amp: 1.5 });
@@ -88,7 +89,7 @@ export function dessinerTitre(): void {
   for (const m of monstres) {
     const r = ENNEMIS[m.ty].rayon * 0.9;
     if (m.x < MORT) {
-      monstre(ctx, m.ty, m.x, m.y - Math.abs(Math.sin(t * 9 + m.i)) * 2, r, m.i + 1, t + m.i, ROUGE, 0);
+      monstre(ctx, m.ty, m.x, m.y - Math.abs(Math.sin(tps * 9 + m.i)) * 2, r, m.i + 1, tps + m.i, ROUGE, 0);
     } else if (m.x < MORT + 22) {
       // Raturé à grands traits, puis effacé
       const p = Math.min(1, (m.x - MORT) / 6);
@@ -100,22 +101,22 @@ export function dessinerTitre(): void {
       ctx.restore();
     }
   }
-  coeur(ctx, 360, 412, 9, Math.max(0, Math.sin(t * 2.4)) ** 4 * 0.35);
+  coeur(ctx, 360, 412, 9, Math.max(0, Math.sin(tps * 2.4)) ** 4 * 0.35);
   const etoiles = totalEtoiles();
-  bouton(60, 480, 280, 64, "Campagne", () => nav.aller("campagne"), { principal: true, sous: etoiles ? `${etoiles} étoile${etoiles > 1 ? "s" : ""}` : "trois cahiers à défendre" });
+  bouton(60, 480, 280, 64, t("Campagne"), () => nav.aller("campagne"), { principal: true, sous: etoiles ? t(etoiles > 1 ? "{n} étoiles" : "{n} étoile", { n: etoiles }) : t("trois cahiers à défendre") });
   const jour = grainePageDuJour();
   const mj = sauvegarde.jour[jour];
-  bouton(60, 560, 134, 64, "Page du jour", () => actions.pageDuJour(), { taille: 19, sous: mj ? `${mj.vagues} vagues, ${mj.vies} ♥` : "la même pour tous" });
+  bouton(60, 560, 134, 64, t("Page du jour"), () => actions.pageDuJour(), { taille: 19, sous: mj ? t("{v} vagues, {n} ♥", { v: mj.vagues, n: mj.vies }) : t("la même pour tous") });
   const ri = sauvegarde.interro;
-  bouton(206, 560, 134, 64, "Interro", () => actions.interro(), { taille: 19, sous: ri ? `record : ${Math.round((ri / 30) * 20)}/20` : "surprise !" });
-  bouton(60, 640, 134, 50, "Comment jouer", () => nav.aller("aide"), { taille: 17 });
-  bouton(206, 640, 134, 50, "Trousse", () => nav.aller("trousse"), { taille: 18 });
-  bouton(60, 702, 134, 44, "À deux", () => ouvrirCoop(), { taille: 19 });
-  bouton(206, 702, 134, 44, "Réglages", () => ouvrirReglages("titre"), { taille: 18 });
+  bouton(206, 560, 134, 64, t("Interro"), () => actions.interro(), { taille: 19, sous: ri ? t("record : {n}/20", { n: Math.round((ri / 30) * 20) }) : t("surprise !") });
+  bouton(60, 640, 134, 50, t("Comment jouer"), () => nav.aller("aide"), { taille: 17 });
+  bouton(206, 640, 134, 50, t("Trousse"), () => nav.aller("trousse"), { taille: 18 });
+  bouton(60, 702, 134, 44, t("À deux"), () => ouvrirCoop(), { taille: 19 });
+  bouton(206, 702, 134, 44, t("Réglages"), () => ouvrirReglages("titre"), { taille: 18 });
   boutonSon(W - 54, 14);
   // Les classements et les succès de Game Center, sur l'iPhone
   if (gameCenterDispo()) bouton(W - 104, 14, 44, 32, "🏆", ouvrirGameCenter, { taille: 17 });
-  paragraphe(ctx, "Dessine tes tours. Trace des murs. Rature les monstres.", W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
+  paragraphe(ctx, t("Dessine tes tours. Trace des murs. Rature les monstres."), W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
 }
 
 // --- L'aide, en trois onglets ---
@@ -124,50 +125,51 @@ let onglet = 0;
 
 export function dessinerAide(): void {
   const ctx = ui.ctx;
-  titre("Comment jouer", 40, 40);
-  ["Dessiner", "Tours", "Monstres"].forEach((nom, i) => bouton(20 + i * 122, 76, 114, 34, nom, () => (onglet = i), { taille: 17, principal: onglet === i }));
+  titre(t("Comment jouer"), 40, 40);
+  ["Dessiner", "Tours", "Monstres"].forEach((nom, i) => bouton(20 + i * 122, 76, 114, 34, t(nom), () => (onglet = i), { taille: 17, principal: onglet === i }));
   if (onglet === 0) {
-    paragraphe(ctx, "Les monstres entrent par les flèches rouges et marchent vers le Cœur. Chaque monstre qui l'atteint te coûte des vies. Tout se paie en encre : elle revient lentement, et chaque monstre tué en rapporte.", W / 2 + 8, 128, 330, { taille: 15, couleur: CRAYON });
+    paragraphe(ctx, t("Les monstres entrent par les flèches rouges et marchent vers le Cœur. Chaque monstre qui l'atteint te coûte des vies. Tout se paie en encre : elle revient lentement, et chaque monstre tué en rapporte."), W / 2 + 8, 128, 330, { taille: 15, couleur: CRAYON });
     const lignes: [string, string][] = [
       ["Petit symbole : une TOUR", "Un cercle, un triangle, un éclair… dessiné en petit, là où tu veux la tour. Touche une tour pour l'améliorer ou la vendre."],
       ["Grand trait lent : un MUR", "La horde le contourne… ou le ronge, si c'est plus court. Construis des labyrinthes."],
       ["Trait sec : une RATURE", "Frappe tout ce qu'elle touche, même les volants. Dans le vide, c'est de l'encre perdue."],
       ["Grande boucle : de la COLLE", "Ralentit tout ce qui est dedans (pas les volants)."],
     ];
-    lignes.forEach(([t, d], i) => {
+    lignes.forEach(([ti, d], i) => {
       const y = 240 + i * 96;
-      ecrire(ctx, t, 44, y, { align: "left", taille: 19 });
-      paragraphe(ctx, d, 44, y + 14, 330, { align: "left", taille: 14, couleur: CRAYON });
+      ecrire(ctx, t(ti), 44, y, { align: "left", taille: 19 });
+      paragraphe(ctx, t(d), 44, y + 14, 330, { align: "left", taille: 14, couleur: CRAYON });
     });
-    paragraphe(ctx, "Enfermer complètement la horde ? Elle s'attaque alors à tes tours. Le chemin qu'elle prendra est tracé au crayon.", W / 2, 640, 340, { taille: 14, couleur: ROUGE });
+    paragraphe(ctx, t("Enfermer complètement la horde ? Elle s'attaque alors à tes tours. Le chemin qu'elle prendra est tracé au crayon."), W / 2, 640, 340, { taille: 14, couleur: ROUGE });
   } else if (onglet === 1) {
     const debloquees = toursDebloquees();
-    TYPES_TOURS.forEach((t, i) => {
-      const f = TOURS[t];
+    TYPES_TOURS.forEach((ty, i) => {
+      const f = TOURS[ty];
       const y = 140 + i * 86;
-      const ok = debloquees.includes(t);
+      const ok = debloquees.includes(ty);
       symbole(ctx, f.glyphe, 44, y + 6, 14, ok ? BLEU : CRAYON, 2.4);
-      dessinerTour(ctx, { type: t, x: 96, y: y + 6, angle: -0.5, niveau: 1, spec: 0, temps: ui.temps, id: i });
-      ecrire(ctx, ok ? f.nom : `${f.nom} (à débloquer)`, 126, y - 8, { align: "left", taille: 18, couleur: ok ? BLEU : CRAYON });
-      paragraphe(ctx, `${f.role} Spécialisations : ${f.specs[0].nom} ou ${f.specs[1].nom}.`, 126, y + 4, 260, { align: "left", taille: 13, couleur: CRAYON });
+      dessinerTour(ctx, { type: ty, x: 96, y: y + 6, angle: -0.5, niveau: 1, spec: 0, temps: ui.temps, id: i });
+      ecrire(ctx, ok ? t(f.nom) : t("{nom} (à débloquer)", { nom: t(f.nom) }), 126, y - 8, { align: "left", taille: 18, couleur: ok ? BLEU : CRAYON });
+      paragraphe(ctx, t("{role} Spécialisations : {a} ou {b}.", { role: t(f.role), a: t(f.specs[0].nom), b: t(f.specs[1].nom) }), 126, y + 4, 260, { align: "left", taille: 13, couleur: CRAYON });
     });
   } else {
     const liste: TypeEnnemi[] = ["gribouille", "carre", "avion", "araignee", "tache", "gomme", "postit", "fantome", "tippex", "punaise", "mere", "compas", "taille", "point"];
-    liste.forEach((t, i) => {
+    liste.forEach((ty, i) => {
       const y = 128 + i * 46;
-      const f = ENNEMIS[t];
-      monstre(ctx, t, 40, y + 4, Math.min(13, f.rayon), i + 1, ui.temps, ROUGE, -0.6);
-      ecrire(ctx, f.nom, 68, y - 7, { align: "left", taille: 16, couleur: ROUGE });
-      paragraphe(ctx, f.conseil, 68, y + 3, 316, { align: "left", taille: 12, couleur: CRAYON });
+      const f = ENNEMIS[ty];
+      monstre(ctx, ty, 40, y + 4, Math.min(13, f.rayon), i + 1, ui.temps, ROUGE, -0.6);
+      ecrire(ctx, t(f.nom), 68, y - 7, { align: "left", taille: 16, couleur: ROUGE });
+      paragraphe(ctx, t(f.conseil), 68, y + 3, 316, { align: "left", taille: 12, couleur: CRAYON });
     });
   }
-  bouton(24, H - 62, 160, 44, "Retour", () => nav.aller("titre"));
-  bouton(W - 184, H - 62, 160, 44, "Le tutoriel", () => actions.tuto(), { principal: true, taille: 19 });
+  bouton(24, H - 62, 160, 44, t("Retour"), () => nav.aller("titre"));
+  bouton(W - 184, H - 62, 160, 44, t("Le tutoriel"), () => actions.tuto(), { principal: true, taille: 19 });
 }
 
 // --- Les cahiers ---
 
 const CAHIERS = ["Cahier de brouillon", "Cahier de maths", "Cahier de musique", "Cahier de dictée"];
+const ONGLETS = ["brouillon", "maths", "musique", "dictée"];
 let cahier = 0;
 let pageChoisie: Page | null = null;
 
@@ -209,16 +211,16 @@ function miniature(ctx: CanvasRenderingContext2D, p: Page, x: number, y: number,
 
 export function dessinerCampagne(): void {
   const ctx = ui.ctx;
-  titre("Les cahiers", 40, 42);
-  CAHIERS.forEach((nom, i) => {
+  titre(t("Les cahiers"), 40, 42);
+  CAHIERS.forEach((_nom, i) => {
     const pages = PAGES.filter((p) => p.cahier === i + 1);
     const ouvert = pages.length > 0 && pageOuverte(pages[0]);
     const etoiles = pages.reduce((s, p) => s + (sauvegarde.etoiles[p.id] ?? 0), 0);
-    bouton(10 + i * 96, 82, 90, 52, nom.replace("Cahier de ", ""), () => ouvert && ((cahier = i), (pageChoisie = null)), {
-      taille: 16, principal: cahier === i, inactif: !ouvert, sous: pages.length ? `${etoiles}/${pages.length * 3} ★` : "bientôt",
+    bouton(10 + i * 96, 82, 90, 52, t(ONGLETS[i]), () => ouvert && ((cahier = i), (pageChoisie = null)), {
+      taille: 16, principal: cahier === i, inactif: !ouvert, sous: pages.length ? `${etoiles}/${pages.length * 3} ★` : t("bientôt"),
     });
   });
-  ecrire(ctx, CAHIERS[cahier], W / 2, 162, { police: "titre", taille: 28 });
+  ecrire(ctx, t(CAHIERS[cahier]), W / 2, 162, { police: "titre", taille: 28 });
   const pages = PAGES.filter((p) => p.cahier === cahier + 1);
   pages.forEach((p, i) => {
     const y = 186 + i * 92;
@@ -226,12 +228,12 @@ export function dessinerCampagne(): void {
     const choisie = pageChoisie === p;
     boite(ctx, 24, y, W - 48, 80, { couleur: ouverte ? (choisie ? ROUGE : BLEU) : CRAYON, epaisseur: choisie ? 2.4 : 1.6, graine: 200 + i, fond: "rgba(255,252,240,0.9)" });
     miniature(ctx, p, 32, y + 7, 36, 66, ouverte);
-    ecrire(ctx, `${p.id}  ${p.nom}`, 80, y + 24, { align: "left", police: "titre", taille: 24, couleur: ouverte ? BLEU : CRAYON });
+    ecrire(ctx, `${p.id}  ${t(p.nom)}`, 80, y + 24, { align: "left", police: "titre", taille: 24, couleur: ouverte ? BLEU : CRAYON });
     const n = sauvegarde.etoiles[p.id] ?? 0;
     for (let k = 0; k < 3; k++) etoile(W - 110 + k * 30, y + 24, 11, k < n, 210 + i * 3 + k);
-    const infos = ouverte ? `${p.vagues} vagues${p.boss ? " · boss : " + ENNEMIS[p.boss].nom : ""}${p.debloque && !pageGagnee(p.id) ? " · débloque : " + (p.debloque === "colle" ? "la colle" : TOURS[p.debloque].nom) : ""}` : "gagne la page précédente pour l'ouvrir";
+    const infos = ouverte ? `${t("{n} vagues", { n: p.vagues })}${p.boss ? " · " + t("boss : {nom}", { nom: t(ENNEMIS[p.boss].nom) }) : ""}${p.debloque && !pageGagnee(p.id) ? " · " + t("débloque : {nom}", { nom: p.debloque === "colle" ? t("la colle") : t(TOURS[p.debloque].nom) }) : ""}` : t("gagne la page précédente pour l'ouvrir");
     paragraphe(ctx, infos, 80, y + 44, 230, { align: "left", taille: 13, couleur: CRAYON });
-    const extras = [sauvegarde.defis[p.id] ? "défi ✓" : "", sauvegarde.sansFin[p.id] ? `sans fin : ${sauvegarde.sansFin[p.id]}` : ""].filter(Boolean).join(" · ");
+    const extras = [sauvegarde.defis[p.id] ? t("défi ✓") : "", sauvegarde.sansFin[p.id] ? t("sans fin : {n}", { n: sauvegarde.sansFin[p.id] }) : ""].filter(Boolean).join(" · ");
     if (extras) ecrire(ctx, extras, W - 40, y + 52, { align: "right", taille: 12, couleur: ROUGE });
     if (ouverte) zone(24, y, W - 48, 80, () => (pageChoisie = choisie ? null : p));
   });
@@ -239,30 +241,30 @@ export function dessinerCampagne(): void {
     const p = pageChoisie;
     const y = H - 210;
     feuille(ctx, 10, y - 10, W - 20, 140, "rgba(246,239,220,0.96)", 77, 0.1);
-    bouton(24, y, W - 48, 54, `Jouer ${p.id}`, () => actions.jouerPage(p, "campagne"), { principal: true, taille: 22 });
+    bouton(24, y, W - 48, 54, t("Jouer {id}", { id: p.id }), () => actions.jouerPage(p, "campagne"), { principal: true, taille: 22 });
     const gagnee = pageGagnee(p.id);
-    bouton(24, y + 64, (W - 60) / 2, 54, "Défi", () => actions.jouerPage(p, "defi"), { inactif: !gagnee, taille: 18, sous: gagnee ? TEXTE_DEFI[p.defi].toLowerCase() : "gagne la page d'abord" });
-    bouton(36 + (W - 60) / 2, y + 64, (W - 60) / 2, 54, "Sans fin", () => actions.jouerPage(p, "sansFin"), { inactif: !gagnee, taille: 18, sous: gagnee ? "jusqu'où tiendras-tu ?" : "gagne la page d'abord" });
+    bouton(24, y + 64, (W - 60) / 2, 54, t("Défi"), () => actions.jouerPage(p, "defi"), { inactif: !gagnee, taille: 18, sous: gagnee ? t(TEXTE_DEFI[p.defi]).toLowerCase() : t("gagne la page d'abord") });
+    bouton(36 + (W - 60) / 2, y + 64, (W - 60) / 2, 54, t("Sans fin"), () => actions.jouerPage(p, "sansFin"), { inactif: !gagnee, taille: 18, sous: gagnee ? t("jusqu'où tiendras-tu ?") : t("gagne la page d'abord") });
   }
   const libres = pointsLibres();
-  bouton(14, H - 62, 120, 44, "Retour", () => nav.aller("titre"), { taille: 18 });
-  bouton(146, H - 62, 120, 44, "Talents", () => nav.aller("talents"), { taille: 18, principal: libres > 0, sous: libres ? `${libres} à placer` : undefined });
-  bouton(278, H - 62, 108, 44, "Trousse", () => nav.aller("trousse"), { taille: 18 });
+  bouton(14, H - 62, 120, 44, t("Retour"), () => nav.aller("titre"), { taille: 18 });
+  bouton(146, H - 62, 120, 44, t("Talents"), () => nav.aller("talents"), { taille: 18, principal: libres > 0, sous: libres ? t("{n} à placer", { n: libres }) : undefined });
+  bouton(278, H - 62, 108, 44, t("Trousse"), () => nav.aller("trousse"), { taille: 18 });
 }
 
 // --- Les talents ---
 
 export function dessinerTalents(): void {
   const ctx = ui.ctx;
-  titre("Talents", 40, 44);
+  titre(t("Talents"), 40, 44);
   const libres = pointsLibres();
-  paragraphe(ctx, `Chaque étoile et chaque défi réussi donnent un bon point. ${libres} à placer sur ${totalEtoiles()}. Ils ne servent pas pour la page du jour.`, W / 2, 84, 340, { taille: 14, couleur: CRAYON });
+  paragraphe(ctx, t("Chaque étoile et chaque défi réussi donnent un bon point. {n} à placer sur {total}. Ils ne servent pas pour la page du jour.", { n: libres, total: totalEtoiles() }), W / 2, 84, 340, { taille: 14, couleur: CRAYON });
   IDS_TALENTS.forEach((id, i) => {
     const f = TALENTS[id];
     const n = sauvegarde.talents[id] ?? 0;
     const y = 148 + i * 74;
-    ecrire(ctx, f.nom, 44, y, { align: "left", taille: 19 });
-    ecrire(ctx, f.texte + " par point", 44, y + 22, { align: "left", taille: 13, couleur: CRAYON });
+    ecrire(ctx, t(f.nom), 44, y, { align: "left", taille: 19 });
+    ecrire(ctx, t("{texte} par point", { texte: t(f.texte) }), 44, y + 22, { align: "left", taille: 13, couleur: CRAYON });
     for (let k = 0; k < f.max; k++) boite(ctx, 236 + k * 18, y - 6, 12, 12, { couleur: k < n ? ROUGE : CRAYON, fond: k < n ? "rgba(196,48,43,0.6)" : undefined, epaisseur: 1.4, graine: 300 + i * 5 + k });
     bouton(W - 102, y - 14, 36, 32, "−", () => {
       if (n > 0) {
@@ -277,7 +279,7 @@ export function dessinerTalents(): void {
       }
     }, { inactif: n >= f.max || libres <= 0, taille: 20, principal: true });
   });
-  bouton(120, H - 62, 160, 44, "Retour", () => nav.aller("campagne"));
+  bouton(120, H - 62, 160, 44, t("Retour"), () => nav.aller("campagne"));
 }
 
 const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -286,27 +288,28 @@ const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", 
 export function pageDeGarde(): void {
   const ctx = ui.ctx;
   const d = new Date();
-  ecrire(ctx, `le ${d.getDate()} ${MOIS[d.getMonth()]}`, W - 24, 40, { align: "right", taille: 18, couleur: CRAYON, rotation: -0.02 });
-  ecrire(ctx, "Mes notes", 50, 92, { align: "left", police: "titre", taille: 44 });
+  ecrire(ctx, t("le {j} {mois}", { j: d.getDate(), mois: t(MOIS[d.getMonth()]) }), W - 24, 40, { align: "right", taille: 18, couleur: CRAYON, rotation: -0.02 });
+  ecrire(ctx, t("Mes notes"), 50, 92, { align: "left", police: "titre", taille: 44 });
   souligne(50, 120, 170, 5);
-  ecrire(ctx, "Les tours", 50, 168, { align: "left", police: "titre", taille: 28, couleur: BLEU });
+  ecrire(ctx, t("Les tours"), 50, 168, { align: "left", police: "titre", taille: 28, couleur: BLEU });
   const tours = toursDebloquees();
-  tours.forEach((t, i) => {
+  tours.forEach((ty, i) => {
     const y = 210 + i * 46;
-    symbole(ctx, TOURS[t].glyphe, 70, y, 12, BLEU, 2);
-    ecrire(ctx, TOURS[t].nom, 98, y - 6, { align: "left", taille: 19 });
-    ecrire(ctx, TOURS[t].role, 98, y + 12, { align: "left", taille: 13, couleur: CRAYON });
+    symbole(ctx, TOURS[ty].glyphe, 70, y, 12, BLEU, 2);
+    ecrire(ctx, t(TOURS[ty].nom), 98, y - 6, { align: "left", taille: 19 });
+    ecrire(ctx, t(TOURS[ty].role), 98, y + 12, { align: "left", taille: 13, couleur: CRAYON });
   });
   let y = 210 + tours.length * 46 + 26;
-  ecrire(ctx, "Les monstres", 50, y, { align: "left", police: "titre", taille: 28, couleur: ROUGE });
+  ecrire(ctx, t("Les monstres"), 50, y, { align: "left", police: "titre", taille: 28, couleur: ROUGE });
   y += 40;
-  const vus = (Object.keys(ENNEMIS) as TypeEnnemi[]).filter((t) => sauvegarde.vus.includes(t) && !ENNEMIS[t].boss && t !== "petite");
-  if (!vus.length) ecrire(ctx, "(aucun encore : ils viendront bien assez tôt)", 50, y, { align: "left", taille: 15, couleur: CRAYON });
-  for (const t of vus) {
+  const vus = (Object.keys(ENNEMIS) as TypeEnnemi[]).filter((ty) => sauvegarde.vus.includes(ty) && !ENNEMIS[ty].boss && ty !== "petite");
+  if (!vus.length) ecrire(ctx, t("(aucun encore : ils viendront bien assez tôt)"), 50, y, { align: "left", taille: 15, couleur: CRAYON });
+  for (const ty of vus) {
     if (y > H - 70) break;
-    monstre(ctx, t, 68, y + 4, 10, 3, ui.temps, ROUGE, 0);
-    const f = ENNEMIS[t];
-    y += paragraphe(ctx, `${f.nom.charAt(0).toUpperCase() + f.nom.slice(1)} : ${f.conseil}`, 92, y - 6, W - 120, { align: "left", taille: 14 }) + 10;
+    monstre(ctx, ty, 68, y + 4, 10, 3, ui.temps, ROUGE, 0);
+    const f = ENNEMIS[ty];
+    const nom = t(f.nom);
+    y += paragraphe(ctx, t("{nom} : {conseil}", { nom: nom.charAt(0).toUpperCase() + nom.slice(1), conseil: t(f.conseil) }), 92, y - 6, W - 120, { align: "left", taille: 14 }) + 10;
   }
 }
 

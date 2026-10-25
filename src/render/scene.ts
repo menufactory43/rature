@@ -14,6 +14,7 @@ import { frottement, lasso, regle } from "./pouvoirs";
 import { objet } from "./objets";
 import type { Pouvoir } from "../sim/pouvoirs";
 import { dessinerTour } from "./tours";
+import { t } from "../i18n";
 
 /** Les obstacles et les gribouillis des marges ne bougent pas : on les dessine une fois par carte (sur le papier). */
 export function decor(ctx: CanvasRenderingContext2D, carte: Carte): void {
@@ -135,10 +136,10 @@ function griffonnages(ctx: CanvasRenderingContext2D, carte: Carte): void {
     } else if (carte.papier === "dictee") {
       // Des bouts de dictée corrigée : un mot, un accent, une faute soulignée
       const mots = ["Dictée", "le corbeau", "à l'école", "les élèves", "c'était", "lundi", "ils ont été", "à côté"];
-      if (genre <= 1) ecrire(ctx, mots[Math.floor(hash3(g, 5, 5) * mots.length)], 0, 0, { taille: 16, couleur: "rgba(60,62,75,0.28)" });
+      if (genre <= 1) ecrire(ctx, t(mots[Math.floor(hash3(g, 5, 5) * mots.length)]), 0, 0, { taille: 16, couleur: "rgba(60,62,75,0.28)" });
       else if (genre === 2) ecrire(ctx, ["é", "è", "ê", "ç"][Math.floor(hash3(g, 5, 5) * 4)], 0, 0, { taille: 26, couleur: "rgba(60,62,75,0.25)" });
       else {
-        ecrire(ctx, ["fote", "aprè", "sa"][Math.floor(hash3(g, 5, 5) * 3)], 0, 0, { taille: 15, couleur: "rgba(196,48,43,0.28)" });
+        ecrire(ctx, t(["fote", "aprè", "sa"][Math.floor(hash3(g, 5, 5) * 3)]), 0, 0, { taille: 15, couleur: "rgba(196,48,43,0.28)" });
         trait(ctx, [{ x: -14, y: 8 }, { x: 14, y: 7 }], { ...crayon, couleur: "rgba(196,48,43,0.3)", graine: g });
       }
     } else if (carte.papier === "portee") {
@@ -177,7 +178,7 @@ function griffonnages(ctx: CanvasRenderingContext2D, carte: Carte): void {
           e.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
         }
         trait(ctx, e, { ...crayon, ferme: true, graine: g });
-      } else ecrire(ctx, ["bof", "ennui…", "J + L", "à rendre lundi"][Math.floor(hash3(g, 5, 5) * 4)], 0, 0, { taille: 14, couleur: "rgba(60,62,75,0.28)" });
+      } else ecrire(ctx, t(["bof", "ennui…", "J + L", "à rendre lundi"][Math.floor(hash3(g, 5, 5) * 4)]), 0, 0, { taille: 14, couleur: "rgba(60,62,75,0.28)" });
     }
     ctx.restore();
   }
@@ -205,14 +206,14 @@ function cadre(ctx: CanvasRenderingContext2D, c: { x: number; y: number; w: numb
   boite(ctx, c.x + m, c.y + m, c.w - m * 2, c.h - m * 2, { couleur: "rgba(60,62,75,0.7)", epaisseur: 1.4, amp: 0.2, graine: g });
   boite(ctx, c.x + m + 3, c.y + m + 3, c.w - m * 2 - 6, c.h - m * 2 - 6, { couleur: "rgba(60,62,75,0.45)", epaisseur: 0.8, amp: 0.2, graine: g + 1 });
   // La consigne, à l'horizontale si la place le permet, sinon le long du cadre
-  const texte = c.w >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : c.w >= 80 ? "NE RIEN ÉCRIRE" : "INTERDIT";
+  const texte = t(c.w >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : c.w >= 80 ? "NE RIEN ÉCRIRE" : "INTERDIT");
   ctx.save();
   if (c.w >= 80 || c.w >= c.h) {
     ecrire(ctx, texte, c.x + c.w / 2, c.y + c.h / 2 + 1, { taille: 10, couleur: "rgba(60,62,75,0.55)" });
   } else {
     ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
     ctx.rotate(-Math.PI / 2);
-    ecrire(ctx, c.h >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : "NE RIEN ÉCRIRE", 0, 1, { taille: 10, couleur: "rgba(60,62,75,0.55)" });
+    ecrire(ctx, t(c.h >= 150 ? "NE RIEN ÉCRIRE DANS CE CADRE" : "NE RIEN ÉCRIRE"), 0, 1, { taille: 10, couleur: "rgba(60,62,75,0.55)" });
   }
   ctx.restore();
 }
@@ -285,7 +286,7 @@ function ennemi(ctx: CanvasRenderingContext2D, e: Ennemi): void {
     const w = 90;
     const y = Math.max(16, e.y - e.r - 30);
     const x = Math.max(w / 2 + 4, Math.min(400 - w / 2 - 4, e.x));
-    ecrire(ctx, f.nom, x, y - 10, { taille: 13, couleur: ROUGE });
+    ecrire(ctx, t(f.nom), x, y - 10, { taille: 13, couleur: ROUGE });
     rectangle(ctx, x - w / 2, y - 3, w, 6, { couleur: ROUGE, epaisseur: 1.2, amp: 0.2, graine: e.id });
     ctx.fillStyle = "rgba(196,48,43,0.75)";
     ctx.fillRect(x - w / 2 + 1, y - 2, (w - 2) * Math.max(0, e.pv / e.pvMax), 4);
