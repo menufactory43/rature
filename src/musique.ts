@@ -19,6 +19,8 @@ const QUEUE = 3;
 interface Voix {
   src: AudioBufferSourceNode;
   gain: GainNode;
+  /** Le volume qui suit le danger (le fondu, lui, est sur `gain`). */
+  intensite: GainNode;
   /** Quand cette voix atteindra la fin de sa boucle. */
   fin: number;
 }
@@ -30,6 +32,11 @@ const origine: Partial<Record<Morceau, number>> = {};
 let actuel: { m: Morceau; voix: Voix } | null = null;
 let voulu: Ambiance = "silence";
 let minuterie = 0;
+/** Le danger voulu (0 : tout va bien, 1 : le Cœur est en train de tomber), et celui qu'on entend, lissé. */
+let dangerVoulu = 0;
+let danger = 0;
+/** Le jeu ralenti (le dernier mot) : la musique ralentit avec lui. */
+let ralentiVoulu = false;
 
 function charger(): void {
   const c = contexte();
@@ -51,9 +58,11 @@ function voix(m: Morceau, depart: number, fondu: number): Voix | null {
   const gain = c.ctx.createGain();
   gain.gain.setValueAtTime(0, t);
   gain.gain.linearRampToValueAtTime(VOLUME[m], t + fondu);
-  src.connect(gain).connect(c.sortie);
+  const intensite = c.ctx.createGain();
+  src.playbackRate.value = vitesseVoulue();
+  src.connect(gain).connect(intensite).connect(c.sortie);
   src.start(t, depart);
-  return { src, gain, fin: t + (b.duration - QUEUE - depart) };
+  return { src, gain, intensite, fin: t + (b.duration - QUEUE - depart) / src.playbackRate.value };
 }
 
 function eteindre(v: Voix, fondu: number): void {
@@ -66,10 +75,28 @@ function eteindre(v: Voix, fondu: number): void {
   v.src.stop(t + fondu + 0.05);
 }
 
+/** La musique suit la partie : quand ça va mal, elle presse le pas et monte ; au ralenti, elle traîne. */
+function suivre(c: AudioContext): void {
+  danger += (dangerVoulu - danger) * 0.12;
+  if (!actuel) return;
+  const v = actuel.voix;
+  const avant = v.src.playbackRate.value;
+  const vitesse = vitesseVoulue();
+  v.src.playbackRate.setTargetAtTime(vitesse, c.currentTime, ralentiVoulu ? 0.08 : 0.4);
+  v.intensite.gain.setTargetAtTime(1 + 0.3 * danger, c.currentTime, 0.4);
+  // Plus vite, la fin de la boucle arrive plus tôt (et plus tard au ralenti) : on la recale à chaque tic
+  v.fin -= (avant - 1) * 0.1;
+}
+
+function vitesseVoulue(): number {
+  return ralentiVoulu ? 0.82 : 1 + 0.08 * danger;
+}
+
 function tic(): void {
   const c = contexte();
   if (!c) return;
   charger();
+  suivre(c.ctx);
   const t = c.ctx.currentTime;
   const m = voulu === "silence" ? null : voulu;
   // Changer d'ambiance : l'ancienne s'éteint, la nouvelle reprend où elle en serait
@@ -95,8 +122,10 @@ function tic(): void {
 }
 
 /** À appeler à chaque image : ce qui se passe à l'écran. */
-export function ambiance(a: Ambiance, _o: { graine: number; cahier: number; danger?: number }): void {
+export function ambiance(a: Ambiance, o: { graine: number; cahier: number; danger?: number; ralenti?: boolean }): void {
   voulu = a;
+  dangerVoulu = Math.max(0, Math.min(1, o.danger ?? 0));
+  ralentiVoulu = !!o.ralenti;
   if (!minuterie) minuterie = window.setInterval(tic, 100);
 }
 

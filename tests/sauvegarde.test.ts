@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fusionner, type Sauvegarde } from "../src/progression";
 
-const vide = (): Sauvegarde => ({ etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [], interro: 0, succes: [] });
+const vide = (): Sauvegarde => ({ etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [], interro: 0, succes: [], cartables: {}, couverture: {} });
 
 describe("la fusion des sauvegardes (iPhone, app, iCloud)", () => {
   it("garde le meilleur de chacune", () => {

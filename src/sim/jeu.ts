@@ -83,6 +83,8 @@ export interface Tour {
   cache?: { cle: string; s: Stats };
   /** Petit recul visuel au tir. */
   recul: number;
+  /** Les mots qu'elle a achevés (pour la copie corrigée). */
+  tues?: number;
 }
 
 export interface Ennemi {
@@ -136,6 +138,8 @@ export interface Mur {
   segs: SegMur[];
   age: number;
   vie: number;
+  /** L'encre qu'il a coûté. */
+  cout: number;
 }
 
 export interface Colle {
@@ -246,7 +250,7 @@ export interface Jeu {
   /** Les trajets de chaque entrée au Cœur, recalculés avec le champ (pour les tracer au crayon). */
   trajets: V[][];
   rng: Rng;
-  stats: { tues: number; fuites: number; encreDepensee: number; ratures: number; ratees: number; toursPosees: number };
+  stats: StatsPartie;
   prochainId: number;
   sons: Son[];
   evts: Evt[];
@@ -261,6 +265,24 @@ export interface Jeu {
   prises: string[];
   /** Bille sur la page, si elle est de la partie. */
   heros: Heros | null;
+}
+
+export interface StatsPartie {
+  tues: number;
+  fuites: number;
+  encreDepensee: number;
+  ratures: number;
+  ratees: number;
+  toursPosees: number;
+  /** Les mots achevés par une rature. */
+  motsRayes: number;
+  /** Le plus de mots touchés d'un seul trait, et ce trait (pour la copie corrigée). */
+  meilleurTrait: number;
+  meilleurTraitPts: V[] | null;
+  /** L'encre partie pour rien : ratures dans le vide, ce qu'on perd en revendant ou en effaçant. */
+  encreGaspillee: number;
+  /** Où les mots ont arraché des vies au Cœur, et combien (pour la copie corrigée). */
+  passages: { entree: number; vies: number }[];
 }
 
 /** Bille, l'héroïne : elle marche où on l'envoie, tape ce qui passe près d'elle, retient la horde, et prend des niveaux. */
@@ -295,7 +317,7 @@ export function nouveauJeu(options: Options): Jeu {
     encre, vies, viesMax: vies,
     tours: [], ennemis: [], murs: [], colles: [], zones: [], tirs: [], effets: [], eclats: [],
     temps: 0, champSale: true, dernierCalcul: -1, trajets: [], rng: new Rng(options.regles.graine ^ 0x7f4a7c15),
-    stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0 },
+    stats: { tues: 0, fuites: 0, encreDepensee: 0, ratures: 0, ratees: 0, toursPosees: 0, motsRayes: 0, meilleurTrait: 0, meilleurTraitPts: null, encreGaspillee: 0, passages: [] },
     prochainId: 1, sons: [], evts: [], rendus: [], recharges: { regle: 0, lasso: 0, gomme: 0 },
     boosts: Object.fromEntries(TYPES_TOURS_LISTE.map((t) => [t, boostNeutre()])) as Record<TypeTour, Boost>,
     mods: { recharge: 1, pvMonstres: 1 }, choix: null, choixFait: 0, prises: [], heros: null,
@@ -327,6 +349,7 @@ export const coutAmelioration = (j: Jeu, t: Tour, spec?: number): number | null 
 };
 export const degatsRature = (j: Jeu) => 30 * j.talents.ratureDegats * (1 + 0.06 * Math.max(0, j.vague - 1));
 export const coutRature = (longueur: number) => 5 + longueur * 0.05;
+
 export const pvSegment = (j: Jeu) => 30 * j.talents.murPv * (1 + 0.04 * Math.max(0, j.vague - 1));
 export const valeurRevente = (t: Tour) => Math.floor(t.investi * 0.6);
 /** Longueur qu'on peut encore tracer avant que le stylo sèche (au tarif d'un mur). */
@@ -471,9 +494,52 @@ export function ameliorer(j: Jeu, t: Tour, spec?: number): boolean {
 export function vendre(j: Jeu, t: Tour): void {
   const gain = valeurRevente(t);
   j.encre += gain;
+  j.stats.encreGaspillee += t.investi - gain;
   j.tours = j.tours.filter((o) => o !== t);
   j.champSale = true;
   effet(j, "texte", t.x, t.y - 20, 1, { texte: `+${gain}` });
+  j.sons.push("casse");
+}
+
+/** L'encre qui reste dans un mur : ce qu'il a coûté, moins ce que la horde en a rongé et ce qui a déjà séché. */
+export function encreDuMur(m: Mur): number {
+  let pv = 0;
+  let max = 0;
+  for (const s of m.segs) {
+    pv += Math.max(0, s.pv);
+    max += s.pvMax;
+  }
+  return Math.floor(m.cout * (max ? pv / max : 0) * Math.max(0, 1 - m.age / m.vie));
+}
+
+/** Le mur sous le doigt, s'il y en a un. */
+export function murSous(j: Jeu, p: V, marge = 14): Mur | null {
+  let best: Mur | null = null;
+  let bd = marge;
+  for (const m of j.murs) {
+    for (const s of m.segs) {
+      if (s.pv <= 0) continue;
+      const d = pointSegDist(p, s.a, s.b);
+      if (d < bd) {
+        bd = d;
+        best = m;
+      }
+    }
+  }
+  return best;
+}
+
+/** Effacer un mur (raté, mal placé) rend l'encre qui lui reste. */
+export function effacerMur(j: Jeu, m: Mur): void {
+  if (!j.murs.includes(m)) return;
+  const gain = encreDuMur(m);
+  j.encre += gain;
+  j.stats.encreGaspillee += m.cout - gain;
+  j.murs = j.murs.filter((o) => o !== m);
+  j.champSale = true;
+  const s = m.segs[Math.floor(m.segs.length / 2)];
+  effet(j, "texte", (s.a.x + s.b.x) / 2, (s.a.y + s.b.y) / 2 - 16, 1, { texte: `+${gain}` });
+  effet(j, "gomme", (s.a.x + s.b.x) / 2, (s.a.y + s.b.y) / 2, 0.5, { r: 24 });
   j.sons.push("casse");
 }
 
@@ -504,20 +570,25 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
   j.stats.encreDepensee += cout;
   if (c.geste === "rature") {
     const pts = resample(trace, 6);
-    const d = degatsRature(j);
     let touches = 0;
+    const d = degatsRature(j);
     for (const e of j.ennemis) {
       if (!e.mort && polylineDist(e, pts) <= e.r + 5) {
         e.revele = Math.max(e.revele, 3);
-        blesser(j, e, d, { chiffre: true });
+        blesser(j, e, d, { chiffre: true, par: "rature" });
         touches++;
       }
     }
     j.stats.ratures++;
+    if (touches > j.stats.meilleurTrait) {
+      j.stats.meilleurTrait = touches;
+      j.stats.meilleurTraitPts = pts;
+    }
     effet(j, "rature", 0, 0, 0.45, { pts });
     j.evts.push({ k: "rature", pts, touches });
     if (!touches) {
       j.stats.ratees++;
+      j.stats.encreGaspillee += cout;
       const m = pts[Math.floor(pts.length / 2)];
       effet(j, "texte", m.x, m.y - 14, 0.8, { texte: t("raté") });
       j.sons.push("rate");
@@ -529,7 +600,7 @@ export function appliquerTrace(j: Jeu, trace: Pt[]): Resultat {
     const pv = pvSegment(j);
     const segs: SegMur[] = [];
     for (let i = 1; i < pts.length; i++) segs.push({ a: pts[i - 1], b: pts[i], pv, pvMax: pv });
-    j.murs.push({ id: j.prochainId++, segs, age: 0, vie: VIE_MUR });
+    j.murs.push({ id: j.prochainId++, segs, age: 0, vie: VIE_MUR, cout });
     j.champSale = true;
     j.sons.push("mur");
     j.evts.push({ k: "mur", pts });
@@ -691,6 +762,8 @@ interface Coup {
   continu?: boolean;
   chiffre?: boolean;
   rouge?: boolean;
+  /** Qui frappe : une rature, ou une tour (son id), pour savoir qui achève. */
+  par?: "rature" | number;
 }
 
 export function blesser(j: Jeu, e: Ennemi, degats: number, coup: Coup = {}): void {
@@ -706,13 +779,18 @@ export function blesser(j: Jeu, e: Ennemi, degats: number, coup: Coup = {}): voi
   e.pv -= d;
   if (!coup.continu) e.touche = 0.12;
   if (coup.chiffre) effet(j, "chiffre", e.x, e.y - e.r - 4, 0.7, { texte: String(Math.round(degats)), rouge: coup.rouge });
-  if (e.pv <= 0) tuer(j, e);
+  if (e.pv <= 0) tuer(j, e, coup.par);
 }
 
-function tuer(j: Jeu, e: Ennemi): void {
+function tuer(j: Jeu, e: Ennemi, par?: "rature" | number): void {
   e.mort = true;
   const f = ENNEMIS[e.type];
   j.stats.tues++;
+  if (par === "rature") j.stats.motsRayes++;
+  else if (par !== undefined) {
+    const t = j.tours.find((o) => o.id === par);
+    if (t) t.tues = (t.tues ?? 0) + 1;
+  }
   let prime = f.prime * j.talents.primes;
   for (const t of j.tours) {
     const s = stats(t);
@@ -856,7 +934,10 @@ export function step(j: Jeu, dt: number): void {
     if (derniere) {
       if (!j.ennemis.length) {
         // Ce qui flottait encore vers le Cœur arrive
-        for (const r of j.rendus) j.vies = Math.min(j.viesMax, j.vies + r.vies);
+        for (const r of j.rendus) {
+          j.vies = Math.min(j.viesMax, j.vies + r.vies);
+          j.stats.fuites = Math.max(0, j.stats.fuites - r.vies);
+        }
         j.rendus = [];
         j.phase = "gagne";
         j.sons.push("page");
@@ -877,12 +958,13 @@ export function step(j: Jeu, dt: number): void {
 function bougerEnnemis(j: Jeu, dt: number): void {
   const vivants = j.ennemis;
   // Ils se poussent un peu, pour ne pas s'empiler ; les voleurs qui repartent remontent le flot sans bousculade
+  // (même entre eux : poussés, ils tournaient autour d'un point du retour sans jamais l'atteindre)
   for (let a = 0; a < vivants.length; a++) {
     const e = vivants[a];
-    if (ENNEMIS[e.type].vole) continue;
+    if (ENNEMIS[e.type].vole || e.retour) continue;
     for (let b = a + 1; b < vivants.length; b++) {
       const o = vivants[b];
-      if (ENNEMIS[o.type].vole || !o.retour !== !e.retour) continue;
+      if (ENNEMIS[o.type].vole || o.retour) continue;
       const dx = o.x - e.x;
       const dy = o.y - e.y;
       const min = e.r + o.r;
@@ -941,7 +1023,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       const s = stats(t);
       if (s.ralenti && hypot(t.x - e.x, t.y - e.y) < s.portee + e.r) {
         lent = Math.max(lent, f.boss ? s.ralenti * 0.5 : s.ralenti);
-        if (s.dps) blesser(j, e, s.dps * dt, { continu: true, ignoreArmure: true });
+        if (s.dps) blesser(j, e, s.dps * dt, { continu: true, ignoreArmure: true, par: t.id });
         if (s.rongeArmure) e.acide = 0.3;
       }
     }
@@ -956,7 +1038,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       const dx = cible.x - e.x;
       const dy = cible.y - e.y;
       const d = hypot(dx, dy);
-      if (d < 6 && e.ri < e.retour.length) e.ri++;
+      if (d < 10 && e.ri < e.retour.length) e.ri++;
       const pas = Math.min(d, vitesse * 1.1 * dt);
       if (d > 0) {
         e.vx = dx / d;
@@ -966,6 +1048,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
       }
       if (e.ri >= e.retour.length && d < 4) {
         e.mort = true;
+        if (!e.vol) continue;
         effet(j, "texte", Math.max(30, Math.min(370, e.x)), Math.max(20, Math.min(700, e.y)), 1.4, { texte: t(e.vol > 1 ? "{n} vies perdues" : "{n} vie perdue", { n: e.vol }) });
         j.evts.push({ k: "evade", x: e.x, y: e.y, vies: e.vol });
         e.vol = 0;
@@ -1040,13 +1123,18 @@ function bougerEnnemis(j: Jeu, dt: number): void {
     if (hypot(e.x - coeur.x, e.y - coeur.y) < 14 + e.r) {
       // Il arrache des vies au Cœur et repart avec : on peut encore les reprendre en le raturant sur le chemin du retour
       const vol = Math.min(f.vies, j.vies);
-      j.vies -= vol;
-      j.stats.fuites += vol;
-      effet(j, "fuite", coeur.x, coeur.y, 0.8, { texte: "-" + vol });
-      j.evts.push({ k: "fuite", x: e.x, y: e.y, vies: vol, type: e.type });
-      j.sons.push("aie");
-      if (vol > 0 && !f.vole) {
-        e.vol = vol;
+      // Le Cœur déjà vide, il n'a plus rien à prendre : il fait demi-tour sans frapper
+      if (vol > 0) {
+        j.vies -= vol;
+        j.stats.fuites += vol;
+        j.stats.passages.push({ entree: e.entree, vies: vol });
+        effet(j, "fuite", coeur.x, coeur.y, 0.8, { texte: "-" + vol });
+        j.evts.push({ k: "fuite", x: e.x, y: e.y, vies: vol, type: e.type });
+        j.sons.push("aie");
+      }
+      e.vol = vol;
+      e.ri = 0;
+      if (!f.vole) {
         // Il remonte à côté du chemin, pour ne pas se perdre dans la horde qui descend
         const t = [...(j.trajets[e.entree] ?? [])].reverse();
         e.retour = t.map((p, i) => {
@@ -1055,12 +1143,7 @@ function bougerEnnemis(j: Jeu, dt: number): void {
           const n = hypot(b.x - a.x, b.y - a.y) || 1;
           return { x: p.x - ((b.y - a.y) / n) * 16, y: p.y + ((b.x - a.x) / n) * 16 };
         });
-        e.ri = 0;
-      } else if (vol > 0) {
-        e.vol = vol;
-        e.retour = [j.carte.entrees[e.entree].depart];
-        e.ri = 0;
-      } else e.mort = true;
+      } else e.retour = [j.carte.entrees[e.entree].depart];
     }
   }
 }
@@ -1120,7 +1203,7 @@ function tours(j: Jeu, dt: number): void {
           vus.add(e.id);
           pts.push({ x: e.x, y: e.y });
           if (s.etourdit && !ENNEMIS[e.type].boss) e.etourdi = Math.max(e.etourdi, s.etourdit);
-          blesser(j, e, s.degats, { chiffre: true });
+          blesser(j, e, s.degats, { chiffre: true, par: t.id });
           let suivant: Ennemi | null = null;
           let bd = 90;
           for (const o of j.ennemis) {
@@ -1153,7 +1236,7 @@ function tours(j: Jeu, dt: number): void {
         e.revele = Math.max(e.revele, 1);
         const pos = { x: e.x, y: e.y };
         if (s.execute && !ENNEMIS[e.type].boss && e.pv - d < e.pvMax * s.execute) d = e.pv + e.bouclier + 1e6;
-        blesser(j, e, d, { chiffre: true, rouge: crit });
+        blesser(j, e, d, { chiffre: true, rouge: crit, par: t.id });
         effet(j, "coche", pos.x, pos.y, 0.5, { rouge: crit });
         j.evts.push({ k: "tir", tour: t.type, id: t.id, x: t.x, y: t.y, angle: t.angle });
         j.sons.push("coche");
@@ -1181,7 +1264,7 @@ function tours(j: Jeu, dt: number): void {
         const n = s.lames ?? 2;
         for (let k = 0; k < n; k++) {
           const p = positionLame(j, t, k, n, s.orbite ?? 36);
-          for (const e of j.ennemis) if (!e.mort && hypot(e.x - p.x, e.y - p.y) < e.r + 8) blesser(j, e, (s.dps ?? 0) * dt, { continu: true, ignoreArmure: s.ignoreArmure });
+          for (const e of j.ennemis) if (!e.mort && hypot(e.x - p.x, e.y - p.y) < e.r + 8) blesser(j, e, (s.dps ?? 0) * dt, { continu: true, ignoreArmure: s.ignoreArmure, par: t.id });
         }
         break;
       }
@@ -1209,7 +1292,7 @@ function bougerTirs(j: Jeu, dt: number): void {
       for (const e of j.ennemis) if (!e.mort && !ENNEMIS[e.type].vole && hypot(e.x - s.x, e.y - s.y) < e.r + 3) explose = true;
       if (explose) {
         const zone = st?.zone ?? 30;
-        for (const e of j.ennemis) if (!e.mort && hypot(e.x - s.x, e.y - s.y) < zone + e.r) blesser(j, e, s.degats, { chiffre: true });
+        for (const e of j.ennemis) if (!e.mort && hypot(e.x - s.x, e.y - s.y) < zone + e.r) blesser(j, e, s.degats, { chiffre: true, par: s.tour });
         if (st?.dps) j.zones.push({ x: s.x, y: s.y, r: zone * 0.8, dps: st.dps, age: 0, vie: 2.5 });
         effet(j, "boom", s.x, s.y, 0.45, { r: zone });
         j.evts.push({ k: "boom", x: s.x, y: s.y, r: zone });
@@ -1219,7 +1302,7 @@ function bougerTirs(j: Jeu, dt: number): void {
     }
     for (const e of j.ennemis) {
       if (e.mort || s.touches.includes(e.id) || hypot(e.x - s.x, e.y - s.y) > e.r + 3) continue;
-      blesser(j, e, s.degats, { chiffre: s.degats >= 20 });
+      blesser(j, e, s.degats, { chiffre: s.degats >= 20, par: s.tour });
       j.evts.push({ k: "impact", x: s.x, y: s.y, angle: atan2(s.vy, s.vx) });
       s.touches.push(e.id);
       if (s.touches.length >= s.perce) {

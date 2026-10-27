@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classer, type Pt } from "../src/sim/gestures";
 import { FORMES, type Glyphe } from "../src/sim/glyphes";
 import { genererCarte, lireCarte, toutesReliees } from "../src/sim/carte";
-import { ajouterEnnemi, ameliorer, blesser, choisirFourniture, lancerPouvoir, stats, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
+import { ajouterEnnemi, ameliorer, blesser, effacerMur, encreDuMur, murSous, choisirFourniture, lancerPouvoir, stats, appliquerTrace, lancerVague, nouveauJeu, poserTour, step, vendre, type Jeu, type Options } from "../src/sim/jeu";
 import { ENNEMIS } from "../src/sim/ennemis";
 import { planifier, resume } from "../src/sim/vagues";
 import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour } from "../src/sim/pages";
@@ -161,6 +161,25 @@ describe("le chemin", () => {
     step(j, 1 / 60);
     expect(g.ralenti).toBeGreaterThan(0);
   });
+  it("effacer un mur rend l'encre qui lui reste", () => {
+    const j = jeuVide();
+    const avant = j.encre;
+    appliquerTrace(j, trait(60, 300, 340, 300, 1500));
+    const m = j.murs[0];
+    const prix = avant - j.encre;
+    expect(murSous(j, { x: 200, y: 306 })).toBe(m);
+    expect(murSous(j, { x: 200, y: 340 })).toBeNull();
+    // Tout neuf : tout revient (à l'arrondi près)
+    expect(encreDuMur(m)).toBeGreaterThanOrEqual(Math.floor(prix) - 1);
+    // À moitié sec et à moitié rongé : un quart
+    m.age = m.vie / 2;
+    for (const s of m.segs) s.pv = s.pvMax / 2;
+    expect(encreDuMur(m)).toBe(Math.floor(m.cout / 4));
+    const e0 = j.encre;
+    effacerMur(j, m);
+    expect(j.encre).toBe(e0 + Math.floor(m.cout / 4));
+    expect(j.murs.length).toBe(0);
+  });
   it("enfermés, ils rongent les tours", () => {
     const j = jeuVide();
     // Une ligne de tours en travers de la page
@@ -286,6 +305,20 @@ describe("une page entière", () => {
     const a = jouer();
     expect(a.phase).toBe("perdu");
     expect(jouer().stats.fuites).toBe(a.stats.fuites);
+  });
+  it("le Cœur vide, chaque page finit perdue : les voleurs qui se suivent ressortent tous", () => {
+    for (const p of PAGES) {
+      const j = nouveauJeu(optionsDePage(p, { toursDispo: ["plume"], colle: false }));
+      lancerVague(j);
+      let apres = 0;
+      for (let i = 0; i < 60 * 60 * 10 && j.phase !== "perdu"; i++) {
+        if (j.phase === "attente") lancerVague(j);
+        step(j, 1 / 60);
+        if (j.vies <= 0) apres++;
+      }
+      expect(j.phase, p.id).toBe("perdu");
+      expect(apres / 60, p.id).toBeLessThan(60);
+    }
   });
   it("la page du jour se génère et se lance", () => {
     const j = nouveauJeu(optionsPageDuJour("2026-10-24", [...TYPES_TOURS]));

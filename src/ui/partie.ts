@@ -17,7 +17,7 @@ import { polylineLength, truncate, type V } from "../sim/geom";
 import { classer, type Pt } from "../sim/gestures";
 import {
   ameliorer, apercuTrajets, appliquerTrace, changerCible, coutAmelioration, coutPose, coutRature, ENCRE_PAR_PX_COLLE, ENCRE_PAR_PX_MUR, etoiles,
-  PAS_SIM, choisirFourniture, fournitureDue, ordonnerHeros, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Options, type Tour,
+  PAS_SIM, choisirFourniture, fournitureDue, ordonnerHeros, gestesPermis, lancerPouvoir, lancerVague, longueurPossible, nouveauJeu, refusPose, stats, step, valeurRevente, vendre, type Jeu, type Mur, type Options, type Tour, effacerMur, encreDuMur, murSous,
 } from "../sim/jeu";
 import { PAGES, TEXTE_DEFI, optionsDePage, type Page } from "../sim/pages";
 import { PORTEE_INFINIE, TOURS, statsTour, type TypeTour } from "../sim/tours";
@@ -33,10 +33,11 @@ import { ouvrirReglages } from "./reglages";
 import { avancerTuto, creerTuto, dessinerTuto, toucherTuto, tutoApres, tutoRefuse, type Tuto } from "./tuto";
 import { marquerTutoVu } from "../sauvegarde";
 import { anglais, t } from "../i18n";
+import { afficherNote, annoter, dessinerAnnotations, dureeCopie, imageCopie, lienDefi, noteSur20, partager, type Annotation, type Defi } from "./copie";
 
 const majuscule = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop" | "tuto";
+export type Mode = "campagne" | "defi" | "sansFin" | "jour" | "interro" | "coop" | "tuto" | "ami";
 
 /** La coop : le lockstep, ce que les deux partagent, et de quoi parler à l'autre (branché par coop/session.ts). */
 export interface CoopPartie {
@@ -73,6 +74,8 @@ interface Partie {
   libelle: string;
   cleJour?: string;
   selection: Tour | null;
+  /** Le mur touché : on peut l'effacer pour reprendre son encre. */
+  selectionMur: Mur | null;
   trace: Pt[] | null;
   doigt: number | null;
   sec: boolean;
@@ -102,6 +105,30 @@ interface Partie {
   tuto: Tuto | null;
   /** Bille prise au doigt : où on l'emmène. */
   herosPris: { x: number; y: number } | null;
+  /** Les conseils fermés d'un toucher : ils ne reviennent plus de la partie. */
+  astucesFermees: string[];
+  /** Depuis quand chaque pouvoir nouveau est annoncé (l'annonce s'en va seule). */
+  annonces: Partial<Record<Pouvoir, number>>;
+  /** La copie corrigée, une fois la page finie. */
+  copie: CopieFin | null;
+  /** Le dernier mot rayé : la page se fige un instant (secondes qui restent). */
+  fige: number;
+  phaseAvant: string;
+  /** Un ami nous a défié : sa note à battre. */
+  defiAmi: Defi | null;
+  /** La mise en page de la dernière image (la copie et le bilan se partagent l'écran autrement sur le cahier ouvert). */
+  mise: Vue["mise"];
+}
+
+/** La fin de page : d'abord la copie corrigée (la page annotée), puis le bilan. */
+interface CopieFin {
+  notes: Annotation[];
+  note: number | null;
+  etape: "copie" | "bilan";
+  depuis: number;
+  /** Revue depuis le bilan : tout est déjà écrit. */
+  revue: boolean;
+  image: HTMLCanvasElement | null;
 }
 
 export let partie: Partie | null = null;
@@ -109,13 +136,14 @@ export let partie: Partie | null = null;
 /** Ce que main branche ici : lancer la page 1-1 à la fin du tutoriel. */
 export const crochets = { pageUne: () => {} };
 
-export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode: Mode; libelle: string; cleJour?: string; coop?: CoopPartie }): void {
+export function demarrerPartie(options: () => Options, quoi: { page?: Page; mode: Mode; libelle: string; cleJour?: string; coop?: CoopPartie; defiAmi?: Defi }): void {
   const jeu = nouveauJeu(options());
   partie = {
     jeu, options, page: quoi.page ?? null, mode: quoi.mode, libelle: quoi.libelle, cleJour: quoi.cleJour,
-    selection: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
+    selection: null, selectionMur: null, trace: null, doigt: null, sec: false, vitesse: 1, pause: false, finDepuis: 0, fin: false,
     fiches: jeu.options.toursDispo.filter((t) => !sauvegarde.appris.includes(t)), message: null, record: false,
-    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [], tuto: null, herosPris: null,
+    fond: null, echelleFond: 0, zoneFond: { x: 0, y: 0, w: W, h: H }, reste: 0, arme: null, nouveaux: [], choixDepuis: 0, coop: quoi.coop ?? null, enAttente: [], tuto: null, herosPris: null, astucesFermees: [], annonces: {},
+    copie: null, fige: 0, phaseAvant: "attente", defiAmi: quoi.defiAmi ?? null, mise: "portrait",
   };
   nav.aller("partie");
   fx.remettreAZero();
@@ -135,7 +163,7 @@ export function lancerTuto(): void {
 function recommencer(): void {
   if (!partie) return;
   if (partie.mode === "tuto") return lancerTuto();
-  demarrerPartie(partie.options, { page: partie.page ?? undefined, mode: partie.mode, libelle: partie.libelle, cleJour: partie.cleJour });
+  demarrerPartie(partie.options, { page: partie.page ?? undefined, mode: partie.mode, libelle: partie.libelle, cleJour: partie.cleJour, defiAmi: partie.defiAmi ?? undefined });
 }
 
 export function mettreEnPause(): void {
@@ -182,6 +210,20 @@ export function continuerSeul(p: Partie): void {
 // --- La boucle ---
 
 const PAS = PAS_SIM;
+/** Le dernier mot de la page : le temps passe à cette vitesse, et la page se fige autant de secondes quand il tombe. */
+const RALENTI = 0.35;
+const FIGE = 0.45;
+
+/** Vrai quand il ne reste plus qu'un mot sur la dernière vague (seul : en coop, le temps est partagé). */
+export function dernierMot(): boolean {
+  const p = partie;
+  if (!p || p.coop || p.tuto || p.fin) return false;
+  const j = p.jeu;
+  if (j.phase !== "jeu" || !Number.isFinite(j.regles.total) || j.vague < j.regles.total || j.file.length) return false;
+  let n = 0;
+  for (const e of j.ennemis) if (!e.mort && !e.retour && ++n > 1) return false;
+  return n === 1;
+}
 
 export function avancerPartie(dt: number): void {
   const p = partie;
@@ -214,7 +256,9 @@ export function avancerPartie(dt: number): void {
     if (p.tuto) {
       p.tuto.menu = p.selection ? (p.selection.y > PAGE_H / 2 ? "haut" : "bas") : null;
       p.reste += dt * avancerTuto(p.tuto, j, dt) * p.vitesse;
-    } else p.reste += dt * (j.phase === "jeu" ? p.vitesse : 1);
+    } else if (p.fige > 0) p.fige = Math.max(0, p.fige - dt);
+    // Le dernier mot de la page passe au ralenti
+    else p.reste += dt * (j.phase === "jeu" ? (dernierMot() ? RALENTI : p.vitesse) : 1);
     let n = 0;
     while (p.reste >= PAS && n++ < 20) {
       step(j, PAS);
@@ -222,20 +266,31 @@ export function avancerPartie(dt: number): void {
     }
     if (p.reste > PAS) p.reste = 0;
   }
+  // Il est rayé : la page se fige, tremble et s'illumine
+  if (p.phaseAvant === "jeu" && j.phase === "gagne") {
+    p.fige = p.coop ? 0 : FIGE;
+    fx.moment(12);
+    vibrer("fort");
+  }
+  p.phaseAvant = j.phase;
   audio.jouer(j.sons);
   j.sons.length = 0;
   surveiller(j);
-  fx.absorber(j, dt);
+  fx.absorber(j, p.fige > 0 ? dt * 0.06 : dernierMot() ? dt * RALENTI : dt);
   if (p.selection && !j.tours.includes(p.selection)) p.selection = null;
+  if (p.selectionMur && !j.murs.includes(p.selectionMur)) p.selectionMur = null;
   if ((j.phase === "gagne" || j.phase === "perdu") && !p.fin) {
     if (!p.finDepuis) p.finDepuis = ui.temps;
-    if (ui.temps - p.finDepuis > 1.2) terminer(p);
+    if (ui.temps - p.finDepuis > (j.phase === "gagne" ? 1.2 + FIGE : 1.2)) terminer(p);
   }
 }
 
 function terminer(p: Partie): void {
   terminerPage(p);
   const j = p.jeu;
+  const tenues = j.phase === "gagne" ? j.regles.total : j.vague - 1;
+  const note = p.mode === "sansFin" || p.mode === "tuto" ? null : p.mode === "interro" ? Math.round((tenues / j.regles.total) * 20) : noteSur20(j);
+  p.copie = { notes: annoter(j, note, motDeLaProf(p), anglais()), note, etape: p.mise === "ouvert" ? "bilan" : "copie", depuis: ui.temps, revue: false, image: null };
   finDePage({
     mode: p.mode, pageId: p.page?.id, gagne: j.phase === "gagne", fuites: j.stats.fuites, defi: p.mode === "defi" && j.phase === "gagne",
     vagues: j.phase === "gagne" ? j.regles.total : j.vague - 1, vies: j.vies, total: j.regles.total, joursJoues: Object.keys(sauvegarde.jour).length,
@@ -249,6 +304,7 @@ function terminerPage(p: Partie): void {
   p.trace = null;
   p.doigt = null;
   p.selection = null;
+  p.selectionMur = null;
   const gagne = j.phase === "gagne";
   if (p.page && p.mode === "campagne" && gagne) {
     const premiere = !(sauvegarde.etoiles[p.page.id] > 0);
@@ -310,6 +366,7 @@ export function toucherPartie(x: number, y: number, e: PointerEvent): boolean {
     p.doigt = e.pointerId;
     p.herosPris = { x, y: y - HAUT };
     p.selection = null;
+    p.selectionMur = null;
     return true;
   }
   p.doigt = e.pointerId;
@@ -403,8 +460,12 @@ export function leverPartie(e: PointerEvent): void {
       }
     }
     p.selection = best && best !== p.selection ? best : null;
+    // Pas de tour sous le doigt : peut-être un mur (raté, ou qui n'a plus rien à faire là)
+    const mur = best ? null : murSous(j, q);
+    p.selectionMur = mur && mur !== p.selectionMur ? mur : null;
     return;
   }
+  p.selectionMur = null;
   if (p.coop) {
     // Le trait part dans le lockstep : il sera joué dans deux dixièmes de seconde, chez moi comme chez l'autre
     p.coop.envoyer({ t: "crayon", fin: true });
@@ -463,6 +524,7 @@ function fond(p: Partie, echelle: number, z: Zone): HTMLCanvasElement {
 export function dessinerPartie(v: Vue): void {
   const p = partie;
   if (!p) return;
+  p.mise = v.mise;
   const ctx = ui.ctx;
   const j = p.jeu;
   const portrait = v.mise === "portrait";
@@ -505,6 +567,7 @@ export function dessinerPartie(v: Vue): void {
     cercle(ctx, q.x, q.y, 10 + Math.sin(ui.temps * 8) * 1.5, { couleur: BLEU, epaisseur: 1.8, graine: 502 });
   }
   if (p.coop) traitsCoop(p);
+  if (p.copie) dessinerAnnotations(ctx, p.copie.notes, p.copie.revue ? Infinity : ui.temps - p.copie.depuis);
   if (p.trace && p.trace.length > 3 && !p.arme) apercu(p);
   if (brouillon && p.trace && p.trace.length > 3 && !p.arme) {
     const b = p.trace[p.trace.length - 1];
@@ -516,7 +579,8 @@ export function dessinerPartie(v: Vue): void {
   // Le cahier ouvert montre la vague à venir sur la page de droite : la carte reste dégagée
   if (j.phase === "attente" && v.mise !== "ouvert") carteAttente(p, v.mise === "bande");
   // Les conseils des premières pages : c'est Bille qui les donne (le bandeau, si on l'a fait taire)
-  const aide = astuce(p);
+  const brut = astuce(p);
+  const aide = brut && !p.astucesFermees.includes(brut) ? brut : null;
   const parBille = billeActive() && !p.tuto;
   conseil(parBille ? aide : null);
   const bandeau = p.arme ? t("{consigne} (touche la page pour annuler)", { consigne: t(POUVOIRS[p.arme].consigne) }) : parBille ? null : aide;
@@ -524,6 +588,8 @@ export function dessinerPartie(v: Vue): void {
     const y = j.carte.coeur.y > PAGE_H - 140 ? HAUT + 160 : HAUT + PAGE_H - 30;
     feuille(ctx, 20, y - 22, W - 40, 44, "rgba(246,239,220,0.88)", 41, 0);
     paragraphe(ctx, bandeau, W / 2, y - 8, W - 60, { taille: 15, couleur: ROUGE });
+    // Un toucher le ferme (la consigne d'un pouvoir armé, elle, s'annule en touchant la page)
+    if (!p.arme) zone(20, y - 22, W - 40, 44, () => p.astucesFermees.push(bandeau));
   }
   let encre = { x: reglages.gaucher ? W - 102 : 18, y: PAGE_H + 20 };
   if (portrait) {
@@ -585,6 +651,7 @@ export function dessinerPartie(v: Vue): void {
   if (j.choix) choixFournitures(p, j.choix);
   else p.choixDepuis = 0;
   if (p.selection) menuTour(p, p.selection);
+  else if (p.selectionMur) menuMur(p, p.selectionMur);
   if (p.tuto) {
     dessinerTuto(ctx, p.tuto, j, portrait, {
       passer: () => {
@@ -667,6 +734,7 @@ function choixFournitures(p: Partie, choix: Fourniture[]): void {
   if (!p.choixDepuis) {
     p.choixDepuis = ui.temps;
     p.selection = null;
+    p.selectionMur = null;
     p.arme = null;
   }
   const tm = ui.temps - p.choixDepuis;
@@ -807,7 +875,12 @@ function astuce(p: Partie): string | null {
   if (id === "1-4" && present("tache")) return t("Les fautes rongent les murs, et éclatent en lettres quand on les rature.");
   if (id === "2-1" && j.vague <= 2) return t("Les cadres « ne rien écrire » : la horde y passe, mais aucune tour ne s'y pose.");
   // Les pouvoirs, la première fois qu'on les a
-  const nouveau = (k: Pouvoir, page: string) => id === page && j.vague >= 2 && j.recharges[k] <= 0 && j.options.pouvoirs?.includes(k);
+  const nouveau = (k: Pouvoir, page: string) => {
+    if (id !== page || j.vague < 2 || j.recharges[k] > 0 || !j.options.pouvoirs?.includes(k)) return false;
+    // Annoncé 15 s, pas jusqu'à ce qu'on s'en serve
+    const depuis = (p.annonces[k] ??= ui.temps);
+    return ui.temps - depuis < 15;
+  };
   if (nouveau("regle", "1-2")) return t("Nouveau : la règle, en bas à droite. Touche-la, puis trace une ligne sur la horde.");
   if (nouveau("lasso", "1-4")) return t("Nouveau : le lasso. Arme-le, puis entoure un paquet de monstres.");
   if (nouveau("gomme", "2-3")) return t("Nouveau : la gomme. Arme-la, puis frotte là où ça grouille.");
@@ -1307,6 +1380,27 @@ function menuTour(p: Partie, to: Tour): void {
   ctx.restore();
 }
 
+/** Le petit menu d'un mur : l'effacer rend l'encre qui lui reste (elle baisse à mesure qu'il sèche et qu'on le ronge). */
+function menuMur(p: Partie, m: Mur): void {
+  const ctx = ui.ctx;
+  const j = p.jeu;
+  const s = m.segs[Math.floor(m.segs.length / 2)];
+  const mx = (s.a.x + s.b.x) / 2;
+  const my = (s.a.y + s.b.y) / 2;
+  const w = 168;
+  const h = 64;
+  const x = Math.max(8, Math.min(W - w - 8, mx - w / 2));
+  const y = HAUT + (my > 90 ? my - h - 18 : my + 18);
+  zone(0, HAUT, W, PAGE_H, () => (p.selectionMur = null));
+  zone(x, y, w, h, () => {});
+  feuille(ctx, x, y, w, h, "rgba(255,252,240,0.97)", 130);
+  boite(ctx, x, y, w, h, { epaisseur: 2, graine: 130 });
+  bouton(x + 8, y + 7, w - 16, 50, t("Effacer le mur"), () => faire(p, { k: "effacer", id: m.id }, () => {
+    effacerMur(j, m);
+    p.selectionMur = null;
+  }), { sous: `+${encreDuMur(m)}`, taille: 17 });
+}
+
 function decrireStats(type: TypeTour, s: ReturnType<typeof stats>): string {
   const c = (n: number) => (anglais() ? String(Math.round(n * 100) / 100) : String(Math.round(n * 100) / 100).replace(".", ","));
   const portee = s.portee >= PORTEE_INFINIE ? t("portée infinie") : t("portée {n}", { n: s.portee });
@@ -1439,9 +1533,41 @@ function motDeBille(p: Partie): string {
   return t(etoiles(j) >= 3 ? "Trois étoiles ! Je suis fière de toi." : "Bravo ! Je savais que tu y arriverais.");
 }
 
+/** La copie rendue : la page reste à l'écran, la prof l'annote, et une fiche en bas mène au bilan. */
+function carteCopie(p: Partie, c: CopieFin): void {
+  const ctx = ui.ctx;
+  const tm = ui.temps - c.depuis;
+  const y = HAUT + PAGE_H + 6;
+  const h = H - y - 6;
+  feuille(ctx, 10, y, W - 20, h, "rgba(255,252,240,0.97)", 210);
+  boite(ctx, 10, y, W - 20, h, { couleur: ROUGE, epaisseur: 1.6, graine: 211 });
+  if (tm < 0.6) return;
+  const fini = tm > dureeCopie(c.notes);
+  bouton(22, y + 10, 160, h - 20, t("Partager"), () => partagerCopie(p), { taille: 18, sous: t("ma copie") });
+  bouton(W - 22 - 180, y + 10, 180, h - 20, t("Mon bilan"), () => {
+    c.etape = "bilan";
+    c.revue = true;
+  }, { principal: fini, taille: 20 });
+}
+
+/** L'image de la copie, et le lien pour qu'un ami la batte (pas pour l'interro ni le tutoriel). */
+function partagerCopie(p: Partie): void {
+  const c = p.copie;
+  if (!c) return;
+  const j = p.jeu;
+  c.image ??= imageCopie(j, c.notes, p.libelle);
+  const note = c.note !== null ? `${afficherNote(c.note, anglais())}/20` : "";
+  const page = p.page;
+  if (page && c.note !== null && (p.mode === "campagne" || p.mode === "ami")) {
+    const url = lienDefi({ page: page.id, note: c.note, tours: j.options.toursDispo, pouvoir: j.options.pouvoirs?.[0] ?? null });
+    void partager(c.image, t("J'ai eu {note} à la page {page} de Rature. Bats ma copie !", { note, page: page.id }), url);
+  } else void partager(c.image, note ? t("Ma copie sur Rature : {note}", { note }) : t("Ma copie sur Rature"));
+}
+
 function dessinerFin(p: Partie): void {
   const ctx = ui.ctx;
   const j = p.jeu;
+  if (p.copie?.etape === "copie") return carteCopie(p, p.copie);
   voile(0.92);
   const gagne = j.phase === "gagne";
   const sansFin = p.mode === "sansFin";
@@ -1515,15 +1641,27 @@ function dessinerFin(p: Partie): void {
   } else {
     ecrire(ctx, t(j.vies > 1 ? "{n} vies gardées" : "{n} vie gardée", { n: j.vies }), W / 2, 220, { police: "titre", taille: 40, couleur: ROUGE });
   }
+  // La note de la copie (l'interro a déjà la sienne, en grand), et celle de l'ami qui nous a défié
+  const note = p.copie?.note ?? null;
+  if (note !== null && !interro) {
+    const ami = p.defiAmi;
+    const texte = ami
+      ? t(note > ami.note ? "{moi}/20 contre {lui}/20 : copie battue !" : note === ami.note ? "{moi}/20 contre {lui}/20 : égalité" : "{moi}/20 contre {lui}/20 : pas encore…", { moi: afficherNote(note, anglais()), lui: afficherNote(ami.note, anglais()) })
+      : t("note : {n}/20", { n: afficherNote(note, anglais()) });
+    ecrire(ctx, texte, W / 2, gagne && p.mode === "campagne" ? 266 : 262, { police: "titre", taille: 24, couleur: ROUGE, rotation: -0.03 });
+  }
   ctx.restore();
   if (p.record) ecrire(ctx, t("record !"), W / 2 + 120, 175, { couleur: ROUGE, taille: 18, rotation: 0.3 });
   if (p.message) {
     boite(ctx, 40, 278, W - 80, 44, { couleur: ROUGE, epaisseur: 1.8, graine: 170 });
     ecrire(ctx, p.message, W / 2, 300, { taille: 17, couleur: ROUGE });
   }
-  const precision = j.stats.ratures ? Math.round((100 * (j.stats.ratures - j.stats.ratees)) / j.stats.ratures) : 0;
-  [t("monstres raturés : {n}", { n: j.stats.tues }), t("vies perdues : {n}", { n: j.stats.fuites }), t("tours posées : {n}", { n: j.stats.toursPosees }), t("ratures dans le mille : {n} %", { n: precision })]
-    .forEach((l, i) => ecrire(ctx, l, W / 2, 360 + i * 28, { taille: 18 }));
+  [
+    t("mots rayés : {n}", { n: j.stats.tues }),
+    t(j.stats.meilleurTrait > 1 ? "meilleur trait : {n} mots d'un coup" : "meilleur trait : {n} mot", { n: j.stats.meilleurTrait }),
+    t("vies perdues : {n}", { n: j.stats.fuites }),
+    t("encre gaspillée : {n}", { n: Math.round(j.stats.encreGaspillee) }),
+  ].forEach((l, i) => ecrire(ctx, l, W / 2, 360 + i * 28, { taille: 18 }));
   if (tm > 1.6) {
     const mot = motDeLaProf(p);
     ecrire(ctx, mot, W / 2 + 10, 476, { police: "titre", taille: 26, couleur: ROUGE, rotation: -0.05, alpha: Math.min(1, (tm - 1.6) * 3) });
@@ -1543,11 +1681,24 @@ function dessinerFin(p: Partie): void {
     if (p.coop?.rejouer) bouton(70, y, 260, 50, t("Rejouer à deux"), p.coop.rejouer, { principal: true, taille: 20 });
     else ecrire(ui.ctx, p.coop ? t("l'hôte peut relancer la page") : "", W / 2, y + 25, { taille: 16, couleur: CRAYON });
     bouton(70, y + 64, 260, 50, p.coop ? t("Quitter la coop") : t("Menu"), () => (p.coop ? p.coop.quitter() : nav.aller("titre")), { taille: 20 });
+    boutonsCopie(p, y + 134);
     return;
   }
-  const versMenu = p.mode === "jour" || p.mode === "interro";
+  const versMenu = p.mode === "jour" || p.mode === "interro" || p.mode === "ami";
   bouton(70, y, 260, 50, t(p.mode === "interro" ? "Nouvelle interro" : "Rejouer cette page"), recommencer, { principal: !suivante, taille: 20 });
   bouton(70, y + 64, 260, 50, versMenu ? t("Menu") : t("Les cahiers"), () => nav.aller(versMenu ? "titre" : "campagne"), { taille: 20 });
+  boutonsCopie(p, y + 134);
+}
+
+/** Revoir la copie (sur le cahier ouvert, elle est déjà sur la page de gauche) et la partager. */
+function boutonsCopie(p: Partie, y: number): void {
+  const c = p.copie;
+  if (!c) return;
+  const defi = !!p.page && c.note !== null && (p.mode === "campagne" || p.mode === "ami");
+  if (p.mise !== "ouvert") {
+    bouton(70, y, 125, 46, t("Ma copie"), () => (c.etape = "copie"), { taille: 17 });
+    bouton(205, y, 125, 46, defi ? t("Défier un ami") : t("Partager"), () => partagerCopie(p), { taille: 17 });
+  } else bouton(70, y, 260, 46, defi ? t("Défier un ami") : t("Partager ma copie"), () => partagerCopie(p), { taille: 17 });
 }
 
 export { PAPIER, cercle, BAS };

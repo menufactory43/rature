@@ -9,7 +9,7 @@ import { reglages } from "../reglages";
 import { monstre } from "./monstres";
 import { t } from "../i18n";
 
-type Genre = "goutte" | "tache" | "fumee" | "tiret" | "anneau" | "papier" | "etincelle" | "plus" | "encre";
+type Genre = "goutte" | "tache" | "fumee" | "tiret" | "anneau" | "papier" | "etincelle" | "plus" | "encre" | "lettre";
 
 interface Particule {
   genre: Genre;
@@ -27,6 +27,8 @@ interface Particule {
   /** Pour l'encre qui vole vers le compteur : le point de départ. */
   x0?: number;
   y0?: number;
+  /** Pour les éclats de mot : la lettre qui vole. */
+  car?: string;
 }
 
 interface Cadavre {
@@ -99,6 +101,41 @@ function secouer(force: number): void {
   fx.secousse = Math.max(fx.secousse, force);
 }
 
+/** Les lettres dont un mot est fait, quand il vole en éclats. */
+const MINUSCULES = "abcdefghijklmnopqrstuvwxyz";
+const MAJUSCULES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function lettresDe(type: TypeEnnemi): string {
+  switch (type) {
+    case "carre": return MAJUSCULES;
+    case "araignee": case "compas": return "zZz&";
+    case "fantome": return "hh";
+    case "tippex": return "++";
+    case "punaise": return "!!¡";
+    case "postit": return "()";
+    case "point": return ".!?";
+    case "taille": return "œŒ";
+    case "mere": return "serpent";
+    default: return MINUSCULES;
+  }
+}
+
+/** Un mot rayé vole en éclats : ses lettres partent en tournant, puis retombent sur la page. */
+function eclats(type: TypeEnnemi, x: number, y: number, n: number, vitesse: number, couleur: string): void {
+  const l = lettresDe(type);
+  for (let k = 0; k < n; k++) {
+    const a = -Math.PI / 2 + hasard(-1.3, 1.3);
+    const v = hasard(0.5, 1) * vitesse;
+    ajouter("lettre", x + hasard(-4, 4), y + hasard(-4, 4), { vx: Math.cos(a) * v, vy: Math.sin(a) * v, vie: hasard(0.6, 0.9), r: hasard(9, 14), vr: hasard(-9, 9), couleur, car: l[Math.floor(Math.random() * l.length)] });
+  }
+}
+
+/** Un grand moment : la page tremble et s'illumine (le dernier mot, un boss). */
+export function moment(force: number, couleur = BLEU): void {
+  secouer(force);
+  fx.flash = Math.max(fx.flash, 0.5);
+  fx.flashCouleur = couleur;
+}
+
 export function banniere(texte: string, sous?: string, rouge = false, vie = 1.6): void {
   fx.banniere = { texte, sous, rouge, age: 0, vie };
 }
@@ -135,6 +172,7 @@ export function absorber(j: Jeu, dt: number): void {
         const f = ENNEMIS[e.type];
         fx.cadavres.push({ type: e.type, x: e.x, y: e.y, r: e.r, id: e.id, angle: e.angle, age: 0, vie: f.boss ? 1.4 : 0.42 });
         gicler(e.x, e.y, f.boss ? 40 : 5 + Math.round(e.r / 3), ROUGE, f.boss ? 260 : 90 + e.r * 4, f.boss ? 4 : 2);
+        eclats(e.type, e.x, e.y, f.boss ? 16 : e.type === "petite" ? 1 : 2 + Math.round(e.r / 7), f.boss ? 260 : 150, f.boss ? ROUGE : BLEU);
         for (let k = 0; k < (f.boss ? 8 : 2); k++) ajouter("tache", e.x + hasard(-e.r, e.r), e.y + hasard(-e.r, e.r), { vie: 1.6, r: hasard(2, 4) * (f.boss ? 2 : 1) });
         // L'encre gagnée vole jusqu'au compteur
         const n = Math.min(4, 1 + Math.floor(e.prime / 6));
@@ -289,9 +327,10 @@ function avancer(dt: number): void {
   for (const p of fx.particules) {
     p.age += dt;
     if (p.age < 0) continue;
-    const frein = p.genre === "fumee" ? 2 : p.genre === "papier" ? 3 : p.genre === "goutte" ? 5 : 1;
+    const frein = p.genre === "fumee" ? 2 : p.genre === "papier" ? 3 : p.genre === "goutte" ? 5 : p.genre === "lettre" ? 0.6 : 1;
     p.vx *= Math.exp(-frein * dt);
     p.vy *= Math.exp(-frein * dt);
+    if (p.genre === "lettre") p.vy += 520 * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.rot += p.vr * dt;
@@ -494,6 +533,17 @@ export function dessinerSur(ctx: CanvasRenderingContext2D): void {
         ctx.moveTo(p.x, p.y - r);
         ctx.lineTo(p.x, p.y + r);
         ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      case "lettre": {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        // Elle grossit en partant, puis pâlit en retombant
+        const s = t < 0.12 ? 0.6 + (t / 0.12) * 0.5 : 1.1 - t * 0.3;
+        ctx.scale(s, s);
+        ecrire(ctx, p.car ?? "a", 0, 0, { police: "titre", taille: p.r * 2, couleur: p.couleur, alpha: t > 0.6 ? (1 - t) / 0.4 : 1 });
         ctx.restore();
         break;
       }

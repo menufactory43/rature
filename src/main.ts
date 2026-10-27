@@ -10,7 +10,7 @@ import { papier } from "./render/papier";
 import { bureau, coinCorne, dessous, ombrePli, reliure } from "./render/bureau";
 import { ameliorer, blesser, choisirFourniture, lancerPouvoir, lancerVague, poserTour } from "./sim/jeu";
 import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } from "./sim/pages";
-import { TYPES_TOURS } from "./sim/tours";
+import { TYPES_TOURS, type TypeTour } from "./sim/tours";
 import { colleDebloquee, effacer, pageGagnee, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
 import { grainePageDuJour } from "./sauvegarde";
@@ -25,9 +25,13 @@ import { compagnonMenu, dessinerScene, glisser as glisserBille, lacher as lacher
 import { dessinerReglages } from "./ui/reglages";
 import { dessinerCoop, ouvrirCoop } from "./ui/coop";
 import { coop } from "./coop/session";
-import { basculerPause, avancerPartie, crochets, demarrerPartie, dessinerPartie, glisserPartie, lancerTuto, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
+import { basculerPause, avancerPartie, dernierMot, crochets, demarrerPartie, dessinerPartie, glisserPartie, lancerTuto, leverPartie, mettreEnPause, partie, toucherPartie } from "./ui/partie";
 import { chargerApparences, dessinerTrousse, glisserTrousse, leverTrousse, toucherTrousse } from "./ui/trousse";
-import { t } from "./i18n";
+import { anglais, t } from "./i18n";
+import { natif } from "./natif";
+import { cartableUtile, dessinerCartable, ouvrirCartable, type Choix } from "./ui/cartable";
+import { afficherNote, lireDefi, type Defi } from "./ui/copie";
+import { dessinerCouverture, glisserCouverture, leverCouverture, toucherCouverture } from "./ui/couverture";
 
 const canvas = document.getElementById("jeu") as HTMLCanvasElement;
 ui.ctx = canvas.getContext("2d")!;
@@ -79,15 +83,34 @@ function versPage(e: PointerEvent): { x: number; y: number } {
 function jouerPage(p: Page, mode: "campagne" | "defi" | "sansFin"): void {
   const base = `${p.id} ${t(p.nom)}`;
   const libelle = mode === "defi" ? t("{base} (défi)", { base }) : mode === "sansFin" ? t("{base} (sans fin)", { base }) : base;
-  demarrerPartie(() => ({
+  const options = (c: Choix) => ({
     ...optionsDePage(p, {
-      toursDispo: toursDebloquees(), colle: colleDebloquee(), talents: talentsActifs(),
+      toursDispo: c.tours, colle: colleDebloquee(), talents: talentsActifs(),
       defi: mode === "defi" ? p.defi : undefined, sansFin: mode === "sansFin",
     }),
-    pouvoirs: pouvoirsDebloques(),
+    pouvoirs: c.pouvoir ? [c.pouvoir] : [],
     // Bille descend sur la page dès la première page gagnée
     heros: pageGagnee("1-1"),
-  }), { page: p, mode, libelle });
+  });
+  const dispo = toursDebloquees();
+  const pouvoirs = pouvoirsDebloques();
+  // Plus de tours ou de pouvoirs que le cartable n'en contient : on choisit avant de partir
+  if (cartableUtile(dispo, pouvoirs)) {
+    ouvrirCartable(p, libelle, options({ tours: dispo, pouvoir: null }).regles, dispo, pouvoirs, (c) => demarrerPartie(() => options(c), { page: p, mode, libelle }));
+  } else demarrerPartie(() => options({ tours: dispo, pouvoir: pouvoirs[0] ?? null }), { page: p, mode, libelle });
+}
+
+/** Le lien d'un ami (« Bats ma copie ») : sa page, avec son cartable, et sa note à battre. */
+function jouerDefiAmi(d: Defi): void {
+  const p = PAGES.find((q) => q.id === d.page);
+  if (!p) return;
+  const tours = d.tours.filter((x): x is TypeTour => (TYPES_TOURS as string[]).includes(x));
+  const pouvoir = TYPES_POUVOIRS.find((k) => k === d.pouvoir) ?? null;
+  demarrerPartie(() => ({
+    ...optionsDePage(p, { toursDispo: tours.length ? tours : ["plume"], colle: true }),
+    pouvoirs: pouvoir ? [pouvoir] : [],
+    heros: true,
+  }), { page: p, mode: "ami", libelle: t("{id} · bats {note}/20", { id: p.id, note: afficherNote(d.note, anglais()) }), defiAmi: d });
 }
 
 function pageDuJour(): void {
@@ -127,6 +150,7 @@ canvas.addEventListener("pointerdown", (e) => {
   let pris = false;
   if (nav.ecran === "partie") pris = toucherPartie(p.x, p.y, e);
   if (nav.ecran === "trousse") pris = toucherTrousse(p.x, p.y);
+  if (nav.ecran === "couverture") pris = toucherCouverture(p.x, p.y);
   if (pris) canvas.setPointerCapture(e.pointerId);
 });
 
@@ -138,12 +162,17 @@ canvas.addEventListener("pointermove", (e) => {
     const p = versPage(e);
     glisserTrousse(p.x, p.y);
   }
+  if (nav.ecran === "couverture") {
+    const p = versPage(e);
+    glisserCouverture(p.x, p.y);
+  }
 });
 
 function lever(e: PointerEvent): void {
   if (lacherBille()) return;
   if (nav.ecran === "partie") leverPartie(e);
   if (nav.ecran === "trousse") leverTrousse();
+  if (nav.ecran === "couverture") leverCouverture();
 }
 canvas.addEventListener("pointerup", lever);
 canvas.addEventListener("pointercancel", lever);
@@ -154,15 +183,24 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("blur", mettreEnPause);
 document.addEventListener("visibilitychange", () => document.hidden && mettreEnPause());
 window.addEventListener("resize", redimensionner);
-// Les marges de sûreté arrivent parfois après le premier affichage (l'app iPhone) : on les surveille
-let encochesVues = "";
-setInterval(() => {
-  const e = JSON.stringify(encoches());
-  if (e !== encochesVues) {
-    encochesVues = e;
+// Les marges de sûreté arrivent après le premier affichage dans l'app iPhone (vers 150 ms) : on les relit à chaque
+// image, et l'app n'affiche rien tant qu'elles ne sont pas là (sinon la page s'affiche trop grande puis dézoome)
+let encochesVues = JSON.stringify(encoches());
+let pret = !natif;
+if (!pret) canvas.style.visibility = "hidden";
+function surveillerEncoches(maintenant: number): boolean {
+  const e = encoches();
+  const cle = JSON.stringify(e);
+  if (cle !== encochesVues) {
+    encochesVues = cle;
     redimensionner();
   }
-}, 500);
+  if (!pret && (e.haut || e.droite || e.bas || e.gauche || maintenant > 600)) {
+    pret = true;
+    canvas.style.visibility = "visible";
+  }
+  return pret;
+}
 // Gaucher : la bande passe de l'autre côté de la carte
 surChangement(redimensionner);
 
@@ -225,7 +263,12 @@ function choisirMusique(): void {
   const j = p.jeu;
   if (j.phase !== phaseAvant && (j.phase === "gagne" || j.phase === "perdu")) musique.jingle(j.phase);
   phaseAvant = j.phase;
-  const o = { graine: j.regles.graine, cahier: p.page?.cahier ?? 2, danger: j.vies < j.viesMax * 0.3 ? 1 : 0 };
+  // Le danger : les vies qui fondent, et les mots qui approchent du Cœur
+  const c = j.carte.coeur;
+  let proche = 0;
+  for (const e of j.ennemis) if (!e.mort && !e.retour) proche = Math.max(proche, 1 - Math.hypot(e.x - c.x, e.y - c.y) / 220);
+  const vies = Math.max(0, Math.min(1, (0.75 - j.vies / j.viesMax) / 0.55));
+  const o = { graine: j.regles.graine, cahier: p.page?.cahier ?? 2, danger: Math.max(vies, proche * 0.8), ralenti: dernierMot() };
   if (j.phase === "gagne" || j.phase === "perdu") musique.ambiance("silence", o);
   else if (j.ennemis.some((e) => !e.mort && ENNEMIS[e.type].boss)) musique.ambiance("boss", o);
   else if (j.phase === "jeu" && (j.ennemis.length || j.file.length)) musique.ambiance("vague", o);
@@ -235,6 +278,11 @@ function choisirMusique(): void {
 let avant = performance.now();
 
 function image(maintenant: number): void {
+  if (!surveillerEncoches(maintenant)) {
+    avant = maintenant;
+    requestAnimationFrame(image);
+    return;
+  }
   const dt = Math.min(0.1, (maintenant - avant) / 1000);
   avant = maintenant;
   ui.temps += dt;
@@ -270,6 +318,8 @@ function image(maintenant: number): void {
     else if (nav.ecran === "trousse") dessinerTrousse();
     else if (nav.ecran === "reglages") dessinerReglages();
     else if (nav.ecran === "coop") dessinerCoop();
+    else if (nav.ecran === "cartable") dessinerCartable();
+    else if (nav.ecran === "couverture") dessinerCouverture();
     // Bille, dans son coin (le titre la dessine lui-même)
     compagnonMenu(nav.ecran, lancerTuto);
     if (vue.mise === "ouvert") {
@@ -298,6 +348,8 @@ void synchroniser().then(() => chargerApparences()).finally(() => void connecter
 // Un lien de salon (…/?salon=ABCD) : on rejoint directement son ami
 const salon = new URLSearchParams(location.search).get("salon");
 if (salon) ouvrirCoop(salon);
+const defiAmi = lireDefi(location.search);
+if (defiAmi && !salon) jouerDefiAmi(defiAmi);
 void document.fonts.load("700 20px Caveat").then(() => document.fonts.load('20px "Patrick Hand"')).finally(() => requestAnimationFrame(image));
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.serviceWorker.register("./sw.js");

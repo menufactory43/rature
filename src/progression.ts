@@ -42,12 +42,16 @@ export interface Sauvegarde {
   interro: number;
   /** Les succès obtenus (les identifiants de Game Center). */
   succes: string[];
+  /** Le dernier cartable emporté sur chaque page : les tours, et le pouvoir. */
+  cartables: Record<string, { tours: TypeTour[]; pouvoir: Pouvoir | null }>;
+  /** Les autocollants collés sur la couverture du cahier : où, et de travers comment. */
+  couverture: Record<string, { x: number; y: number; r: number }>;
 }
 
 const CLE = "rature.sauvegarde.v2";
 
 function vide(): Sauvegarde {
-  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [], interro: 0, succes: [] };
+  return { etoiles: {}, defis: {}, sansFin: {}, talents: {}, apparences: {}, jour: {}, appris: [], vus: [], interro: 0, succes: [], cartables: {}, couverture: {} };
 }
 
 export let sauvegarde: Sauvegarde = charger();
@@ -106,6 +110,8 @@ export function fusionner(a: Sauvegarde, bp: Partial<Sauvegarde>): Sauvegarde {
     vus: [...new Set([...a.vus, ...b.vus])],
     interro: Math.max(a.interro, b.interro),
     succes: [...new Set([...a.succes, ...b.succes])],
+    cartables: { ...b.cartables, ...a.cartables },
+    couverture: { ...b.couverture, ...a.couverture },
   };
 }
 

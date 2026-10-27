@@ -113,10 +113,12 @@ export function dessinerTitre(): void {
   bouton(206, 640, 134, 50, t("Trousse"), () => nav.aller("trousse"), { taille: 18 });
   bouton(60, 702, 134, 44, t("À deux"), () => ouvrirCoop(), { taille: 19 });
   bouton(206, 702, 134, 44, t("Réglages"), () => ouvrirReglages("titre"), { taille: 18 });
+  const colles = Object.keys(sauvegarde.couverture).length;
+  bouton(60, 756, 280, 44, t("Mon cahier"), () => nav.aller("couverture"), { taille: 19, sous: colles ? undefined : t("tes autocollants") });
   boutonSon(W - 54, 14);
   // Les classements et les succès de Game Center, sur l'iPhone
   if (gameCenterDispo()) bouton(W - 104, 14, 44, 32, "🏆", ouvrirGameCenter, { taille: 17 });
-  paragraphe(ctx, t("Dessine tes tours. Trace des murs. Rature les monstres."), W / 2, 786, 320, { couleur: CRAYON, taille: 15 });
+  paragraphe(ctx, t("Dessine tes tours. Trace des murs. Rature les monstres."), W / 2, 816, 320, { couleur: CRAYON, taille: 15 });
 }
 
 // --- L'aide, en trois onglets ---
