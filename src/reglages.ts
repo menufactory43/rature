@@ -20,7 +20,8 @@ const CLE = "rature.reglages";
 
 function charger(): Reglages {
   // La langue du téléphone, la première fois : le français s'il parle français, l'anglais sinon
-  const fr = typeof navigator === "undefined" || (navigator.language ?? "fr").toLowerCase().startsWith("fr");
+  // Sur un portail de jeux (VITE_PORTAIL, CrazyGames) : l'anglais par défaut, quelle que soit la langue du navigateur ; le français reste dans les réglages.
+  const fr = !import.meta.env.VITE_PORTAIL && (typeof navigator === "undefined" || (navigator.language ?? "fr").toLowerCase().startsWith("fr"));
   const defaut: Reglages = { musique: 0.6, effets: 0.9, vibrations: true, gaucher: false, effetsReduits: false, bille: true, langue: fr ? "fr" : "en" };
   try {
     return { ...defaut, ...(JSON.parse(localStorage.getItem(CLE) ?? "") as Partial<Reglages>) };
