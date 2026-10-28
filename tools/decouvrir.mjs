@@ -59,7 +59,7 @@ const fr = {
   finTitre: 'Prends un stylo',
   finTexte: 'Pas une seule image dans le jeu : tout est tracé à l’encre, comme dans les marges de tes cahiers d’école.',
   bientot: 'Bientôt sur l’App Store, sur iPhone et iPad. En attendant, il se joue en entier dans le navigateur.',
-  pied: 'Rature, un jeu du studio <b>Praxeon</b>, fait le soir après le coucher des enfants.',
+  pied: 'Rature, un jeu du studio <a href="https://praxeongames.com/"><b>Praxeon</b></a>, fait le soir après le coucher des enfants.',
   confidentialite: 'Confidentialité', assistance: 'Assistance',
 };
 
@@ -107,7 +107,7 @@ const en = {
   finTitre: 'Grab a pen',
   finTexte: 'Not a single image in the game: everything is drawn in ink, like in the margins of your school notebooks.',
   bientot: 'Coming soon to the App Store, on iPhone and iPad. Until then, the whole game plays in your browser. The game is in English and French.',
-  pied: 'Rature, a game by the <b>Praxeon</b> studio, made in the evenings after the kids are asleep.',
+  pied: 'Rature, a game by the <a href="https://praxeongames.com/en/"><b>Praxeon</b></a> studio, made in the evenings after the kids are asleep.',
   confidentialite: 'Privacy', assistance: 'Support',
 };
 
@@ -134,7 +134,7 @@ const page = (t) => {
   <meta property="og:image" content="${RACINE}decouvrir/img/${t.lang}/apercu.webp">
   <link rel="preload" href="${p}polices/caveat-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${p}style.css">
-  <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'VideoGame', name: 'Rature', genre: ['Tower defense', t.lang === 'fr' ? 'Stratégie' : 'Strategy'], gamePlatform: ['Web', 'iPhone', 'iPad'], inLanguage: ['fr', 'en'], url: ici, description: t.description, offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' } })}</script>
+  <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'VideoGame', name: 'Rature', genre: ['Tower defense', t.lang === 'fr' ? 'Stratégie' : 'Strategy'], gamePlatform: ['Web', 'iPhone', 'iPad'], inLanguage: ['fr', 'en'], url: ici, description: t.description, publisher: { '@type': 'Organization', name: 'Praxeon', url: 'https://praxeongames.com/' }, offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' } })}</script>
 </head>
 <body>
   <header class="barre">
