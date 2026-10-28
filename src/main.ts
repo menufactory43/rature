@@ -13,7 +13,7 @@ import { PAGES, optionsDePage, optionsInterro, optionsPageDuJour, type Page } fr
 import { TYPES_TOURS, type TypeTour } from "./sim/tours";
 import { colleDebloquee, effacer, pageGagnee, pouvoirsDebloques, sauvegarde, talentsActifs, toursDebloquees } from "./progression";
 import { TYPES_POUVOIRS } from "./sim/pouvoirs";
-import { grainePageDuJour } from "./sauvegarde";
+import { grainePageDuJour, tutoVu } from "./sauvegarde";
 import { synchroniser } from "./progression";
 import { connecterGameCenter } from "./succes";
 import { surChangement } from "./reglages";
@@ -350,6 +350,8 @@ const salon = new URLSearchParams(location.search).get("salon");
 if (salon) ouvrirCoop(salon);
 const defiAmi = lireDefi(location.search);
 if (defiAmi && !salon) jouerDefiAmi(defiAmi);
+// Sur un portail de jeux (VITE_PORTAIL=crazygames au build), on arrive directement en jeu : le tutoriel la première fois, le menu ensuite.
+if (import.meta.env.VITE_PORTAIL && !salon && !defiAmi && !tutoVu()) lancerTuto();
 void document.fonts.load("700 20px Caveat").then(() => document.fonts.load('20px "Patrick Hand"')).finally(() => requestAnimationFrame(image));
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) void navigator.serviceWorker.register("./sw.js");
