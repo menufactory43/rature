@@ -24,6 +24,8 @@ describe("relais de la coop", () => {
     expect(origineAdmise("https://menufactory43.github.io")).toBe(true);
     expect(origineAdmise("capacitor://localhost")).toBe(true);
     expect(origineAdmise("http://192.168.1.139:5191")).toBe(true);
+    expect(origineAdmise("https://html-classic.itch.zone")).toBe(true);
+    expect(origineAdmise("https://itch.zone.exemple.com")).toBe(false);
     expect(origineAdmise("https://exemple.com")).toBe(false);
   });
 });
